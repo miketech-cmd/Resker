@@ -1,0 +1,115 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-elevated: #f4efe6;
+  --ink: #1f1b16;
+  --muted: #6b645c;
+  --border: #e6dfd4;
+  --accent: #e4572e;
+  --accent-ink: #ffffff;
+  --status-to-try: #e9a23b;
+  --status-to-try-bg: #fdf2df;
+  --status-to-try-ink: #7d4e07;
+  --status-exploration: #5b6cd9;
+  --status-exploration-bg: #ebeffe;
+  --status-exploration-ink: #2c3ba3;
+  --status-tried: #3b7d4f;
+  --status-tried-bg: #e4f2e8;
+  --status-tried-ink: #225431;
+  --danger: #c6362c;
+  --ring: #e4572e;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #14110f;
+  --surface: #1e1a17;
+  --surface-elevated: #28221e;
+  --ink: #f3eee8;
+  --muted: #a39a90;
+  --border: #322b26;
+  --accent: #f06a43;
+  --accent-ink: #14110f;
+  --status-to-try: #f0b455;
+  --status-to-try-bg: #322613;
+  --status-to-try-ink: #f6cd86;
+  --status-exploration: #7d8bea;
+  --status-exploration-bg: #1d223f;
+  --status-exploration-ink: #b2bcf7;
+  --status-tried: #5fa572;
+  --status-tried-bg: #182b1e;
+  --status-tried-ink: #95cf9f;
+  --danger: #e55b50;
+  --ring: #f06a43;
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-to-try: var(--status-to-try);
+  --color-to-try-bg: var(--status-to-try-bg);
+  --color-to-try-ink: var(--status-to-try-ink);
+  --color-exploration: var(--status-exploration);
+  --color-exploration-bg: var(--status-exploration-bg);
+  --color-exploration-ink: var(--status-exploration-ink);
+  --color-tried: var(--status-tried);
+  --color-tried-bg: var(--status-tried-bg);
+  --color-tried-ink: var(--status-tried-ink);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  html,
+  body {
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+}
+
+@keyframes steam-wisp {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.9);
+  }
+  45% {
+    opacity: 1;
+    transform: translateY(0px) scale(1);
+  }
+  100% {
+    opacity: 0.9;
+    transform: translateY(-3px) scale(1.02);
+  }
+}
+
+.animate-steam-wisp {
+  animation: steam-wisp 300ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-steam-wisp {
+    animation: none;
+  }
+}
