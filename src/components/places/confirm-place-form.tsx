@@ -1,18 +1,16 @@
 "use client";
 
-import { ArrowLeft, MapPin, Plus, X } from "lucide-react";
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { ArrowLeft, MapPin } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
 import { FoodIcon } from "@/components/icons/food-icons";
+import { CityInput } from "@/components/places/city-input";
+import { CuisineTagEditor } from "@/components/places/cuisine-tag-editor";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { StarRating, formatStars } from "@/components/ui/star-rating";
 import { showSavedToast, toast } from "@/components/ui/toast";
-import {
-  QUICK_CUISINE_SUGGESTIONS,
-  formatPriceLevel,
-  mapCuisinesToFoodIcon,
-} from "@/lib/places/cuisines";
+import { formatPriceLevel, mapCuisinesToFoodIcon } from "@/lib/places/cuisines";
 import {
   useSaveRestaurantMutation,
   type PlacePrefillData,
@@ -42,9 +40,9 @@ export function ConfirmPlaceForm({
   onSaved: (restaurant: UserRestaurantItem) => void;
 }) {
   const [name, setName] = useState(prefill.name);
+  const [city, setCity] = useState(prefill.city ?? "");
   const [address, setAddress] = useState(prefill.address ?? "");
   const [cuisines, setCuisines] = useState<string[]>(prefill.cuisines);
-  const [customCuisine, setCustomCuisine] = useState("");
   const [priceLevel, setPriceLevel] = useState<number | null>(prefill.priceLevel);
   const [status, setStatus] = useState<RestaurantStatus>("to_try");
   const [ratingHalf, setRatingHalf] = useState<number | null>(null);
@@ -53,28 +51,6 @@ export function ConfirmPlaceForm({
 
   const saveMutation = useSaveRestaurantMutation();
   const iconKey = mapCuisinesToFoodIcon(cuisines);
-
-  function addCuisineTag(rawTag: string) {
-    const clean = rawTag.trim();
-    if (!clean) return;
-    setCuisines((prev) => {
-      if (prev.some((c) => c.toLowerCase() === clean.toLowerCase())) return prev;
-      if (prev.length >= 6) return prev;
-      return [...prev, clean];
-    });
-    setCustomCuisine("");
-  }
-
-  function removeCuisineTag(tag: string) {
-    setCuisines((prev) => prev.filter((c) => c !== tag));
-  }
-
-  function handleCustomCuisineKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter" || event.key === ",") {
-      event.preventDefault();
-      addCuisineTag(customCuisine);
-    }
-  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -87,7 +63,7 @@ export function ConfirmPlaceForm({
       lng: prefill.lng,
       name,
       address: address.trim() ? address.trim() : null,
-      city: prefill.city,
+      city: city.trim() ? city.trim() : null,
       countryCode: prefill.countryCode,
       cuisines,
       priceLevel,
@@ -115,10 +91,6 @@ export function ConfirmPlaceForm({
       );
     }
   }
-
-  const availableSuggestions = QUICK_CUISINE_SUGGESTIONS.filter(
-    (s) => !cuisines.some((c) => c.toLowerCase() === s.toLowerCase()),
-  ).slice(0, 6);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 pb-2">
@@ -157,11 +129,12 @@ export function ConfirmPlaceForm({
               required
             />
           </div>
-          {prefill.city ? (
+          {city.trim() || priceLevel ? (
             <p className="text-xs text-muted">
-              {prefill.city}
-              {prefill.countryCode ? `, ${prefill.countryCode}` : ""}
-              {priceLevel ? ` · ${formatPriceLevel(priceLevel)}` : ""}
+              {city.trim()}
+              {city.trim() && prefill.countryCode ? `, ${prefill.countryCode}` : ""}
+              {city.trim() && priceLevel ? " · " : ""}
+              {priceLevel ? formatPriceLevel(priceLevel) : ""}
             </p>
           ) : null}
         </div>
@@ -225,69 +198,7 @@ export function ConfirmPlaceForm({
         </div>
       </div>
 
-      {/* Cuisine Tags */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="confirm-custom-cuisine">Cuisines</Label>
-          <span className="text-xs text-muted">{cuisines.length}/6</span>
-        </div>
-
-        {cuisines.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {cuisines.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => removeCuisineTag(tag)}
-                aria-label={`Remove ${tag}`}
-                className="inline-flex min-h-9 cursor-pointer items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-3 text-sm font-medium text-ink hover:bg-accent/20 focus-visible:outline-2 focus-visible:outline-ring"
-              >
-                <span>{tag}</span>
-                <X className="size-3.5 text-muted" aria-hidden="true" />
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        {cuisines.length < 6 ? (
-          <>
-            <div className="flex gap-2">
-              <Input
-                id="confirm-custom-cuisine"
-                value={customCuisine}
-                onChange={(e) => setCustomCuisine(e.target.value)}
-                onKeyDown={handleCustomCuisineKeyDown}
-                placeholder="Add cuisine tag (e.g. Ramen)"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => addCuisineTag(customCuisine)}
-                disabled={!customCuisine.trim()}
-                aria-label="Add cuisine tag"
-              >
-                <Plus className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
-
-            {availableSuggestions.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 pt-0.5">
-                {availableSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => addCuisineTag(suggestion)}
-                    className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full border border-border bg-surface px-2.5 text-xs font-medium text-muted hover:border-ink/30 hover:text-ink focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    <Plus className="size-3" aria-hidden="true" />
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </div>
+      <CuisineTagEditor id="confirm-custom-cuisine" value={cuisines} onChange={setCuisines} />
 
       {/* Optional Rating */}
       <div className="space-y-1.5">
@@ -298,15 +209,18 @@ export function ConfirmPlaceForm({
         <StarRating value={ratingHalf} onChange={setRatingHalf} size="lg" />
       </div>
 
-      {/* Editable Address */}
-      <div className="space-y-1.5">
-        <Label htmlFor="confirm-place-address">Address</Label>
-        <Input
-          id="confirm-place-address"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="Street address"
-        />
+      {/* Editable City & Address */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <CityInput id="confirm-place-city" value={city} onChange={setCity} />
+        <div className="space-y-1.5">
+          <Label htmlFor="confirm-place-address">Address</Label>
+          <Input
+            id="confirm-place-address"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Street address"
+          />
+        </div>
       </div>
 
       {/* Tasting notes */}

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { PlacesLibraryPreview } from "@/components/places/places-library-preview";
+import { PlacesLibrary } from "@/components/places/places-library";
 import { getOptionalUser } from "@/server/auth-guard";
 import { getUserRestaurants } from "@/server/places";
 
@@ -15,7 +15,7 @@ export default async function PlacesPage() {
 
   return (
     <Suspense fallback={null}>
-      <PlacesLibraryPreview initialRestaurants={initialRestaurants} />
+      <PlacesLibrary initialRestaurants={initialRestaurants} />
     </Suspense>
   );
 }

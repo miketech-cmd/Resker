@@ -48,4 +48,31 @@ export const createRestaurantSchema = z.object({
   notes: z.string().trim().max(2000).nullable().optional(),
 });
 
+export const uuidParamSchema = z.string().uuid("Invalid restaurant identifier.");
+
+export const updateRestaurantSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Restaurant name is required.")
+      .max(160, "Name must be 160 characters or fewer.")
+      .optional(),
+    address: z.string().trim().max(300).nullable().optional(),
+    city: z.string().trim().max(120).nullable().optional(),
+    countryCode: z.string().trim().max(8).nullable().optional(),
+    cuisines: z
+      .array(z.string().trim().min(1).max(40))
+      .max(6, "Keep up to 6 cuisine tags.")
+      .optional(),
+    priceLevel: z.number().int().min(1).max(4).nullable().optional(),
+    status: z.enum(RESTAURANT_STATUSES).optional(),
+    ratingHalf: z.number().int().min(1).max(10).nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Provide at least one field to update.",
+  });
+
 export type CreateRestaurantInput = z.infer<typeof createRestaurantSchema>;
+export type UpdateRestaurantInput = z.infer<typeof updateRestaurantSchema>;

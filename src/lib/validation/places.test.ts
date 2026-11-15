@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { autocompleteQuerySchema, createRestaurantSchema, resolveUrlSchema } from "./places";
+import {
+  autocompleteQuerySchema,
+  createRestaurantSchema,
+  resolveUrlSchema,
+  updateRestaurantSchema,
+  uuidParamSchema,
+} from "./places";
 
 describe("places validation schemas", () => {
   it("validates resolve URL payload", () => {
@@ -37,5 +43,20 @@ describe("places validation schemas", () => {
       priceLevel: 5,
     });
     expect(invalidPrice.success).toBe(false);
+  });
+
+  it("validates partial updates and UUID parameters", () => {
+    expect(uuidParamSchema.safeParse("not-a-uuid").success).toBe(false);
+    expect(uuidParamSchema.safeParse("259957a2-ae04-4966-aa2f-23991b9beab0").success).toBe(true);
+
+    expect(updateRestaurantSchema.safeParse({}).success).toBe(false);
+    expect(
+      updateRestaurantSchema.safeParse({
+        city: "New York",
+        cuisines: ["Pizza"],
+        status: "tried",
+        ratingHalf: 9,
+      }).success,
+    ).toBe(true);
   });
 });

@@ -4,7 +4,11 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { places, userRestaurants } from "@/db/schema";
-import type { CreateRestaurantInput, RestaurantStatus } from "@/lib/validation/places";
+import type {
+  CreateRestaurantInput,
+  RestaurantStatus,
+  UpdateRestaurantInput,
+} from "@/lib/validation/places";
 import { consumeApiQuota } from "@/server/api-usage";
 import { getPlaceDetails, type NormalizedPlaceDetails } from "@/server/google";
 
@@ -58,32 +62,34 @@ function serializeRestaurantRow(row: {
   };
 }
 
+const RESTAURANT_SELECT_COLUMNS = {
+  id: userRestaurants.id,
+  placeId: userRestaurants.placeId,
+  googlePlaceId: places.googlePlaceId,
+  googleMapsUri: places.googleMapsUri,
+  lat: places.lat,
+  lng: places.lng,
+  name: userRestaurants.name,
+  address: userRestaurants.address,
+  city: userRestaurants.city,
+  countryCode: userRestaurants.countryCode,
+  cuisines: userRestaurants.cuisines,
+  priceLevel: userRestaurants.priceLevel,
+  status: userRestaurants.status,
+  ratingHalf: userRestaurants.ratingHalf,
+  notes: userRestaurants.notes,
+  visitCount: userRestaurants.visitCount,
+  lastVisitedOn: userRestaurants.lastVisitedOn,
+  createdAt: userRestaurants.createdAt,
+  updatedAt: userRestaurants.updatedAt,
+} as const;
+
 export async function findUserRestaurantByGooglePlaceId(
   userId: string,
   googlePlaceId: string,
 ): Promise<UserRestaurantSummary | null> {
   const [row] = await db
-    .select({
-      id: userRestaurants.id,
-      placeId: userRestaurants.placeId,
-      googlePlaceId: places.googlePlaceId,
-      googleMapsUri: places.googleMapsUri,
-      lat: places.lat,
-      lng: places.lng,
-      name: userRestaurants.name,
-      address: userRestaurants.address,
-      city: userRestaurants.city,
-      countryCode: userRestaurants.countryCode,
-      cuisines: userRestaurants.cuisines,
-      priceLevel: userRestaurants.priceLevel,
-      status: userRestaurants.status,
-      ratingHalf: userRestaurants.ratingHalf,
-      notes: userRestaurants.notes,
-      visitCount: userRestaurants.visitCount,
-      lastVisitedOn: userRestaurants.lastVisitedOn,
-      createdAt: userRestaurants.createdAt,
-      updatedAt: userRestaurants.updatedAt,
-    })
+    .select(RESTAURANT_SELECT_COLUMNS)
     .from(userRestaurants)
     .innerJoin(places, eq(userRestaurants.placeId, places.id))
     .where(and(eq(userRestaurants.userId, userId), eq(places.googlePlaceId, googlePlaceId)))
@@ -94,33 +100,68 @@ export async function findUserRestaurantByGooglePlaceId(
 
 export async function getUserRestaurants(userId: string): Promise<UserRestaurantSummary[]> {
   const rows = await db
-    .select({
-      id: userRestaurants.id,
-      placeId: userRestaurants.placeId,
-      googlePlaceId: places.googlePlaceId,
-      googleMapsUri: places.googleMapsUri,
-      lat: places.lat,
-      lng: places.lng,
-      name: userRestaurants.name,
-      address: userRestaurants.address,
-      city: userRestaurants.city,
-      countryCode: userRestaurants.countryCode,
-      cuisines: userRestaurants.cuisines,
-      priceLevel: userRestaurants.priceLevel,
-      status: userRestaurants.status,
-      ratingHalf: userRestaurants.ratingHalf,
-      notes: userRestaurants.notes,
-      visitCount: userRestaurants.visitCount,
-      lastVisitedOn: userRestaurants.lastVisitedOn,
-      createdAt: userRestaurants.createdAt,
-      updatedAt: userRestaurants.updatedAt,
-    })
+    .select(RESTAURANT_SELECT_COLUMNS)
     .from(userRestaurants)
     .innerJoin(places, eq(userRestaurants.placeId, places.id))
     .where(eq(userRestaurants.userId, userId))
     .orderBy(desc(userRestaurants.updatedAt));
 
   return rows.map(serializeRestaurantRow);
+}
+
+export async function getUserRestaurantById(
+  userId: string,
+  restaurantId: string,
+): Promise<UserRestaurantSummary | null> {
+  const [row] = await db
+    .select(RESTAURANT_SELECT_COLUMNS)
+    .from(userRestaurants)
+    .innerJoin(places, eq(userRestaurants.placeId, places.id))
+    .where(and(eq(userRestaurants.id, restaurantId), eq(userRestaurants.userId, userId)))
+    .limit(1);
+
+  return row ? serializeRestaurantRow(row) : null;
+}
+
+export async function updateUserRestaurant(
+  userId: string,
+  restaurantId: string,
+  input: UpdateRestaurantInput,
+): Promise<UserRestaurantSummary | null> {
+  const updates: Partial<typeof userRestaurants.$inferInsert> = {};
+  if (input.name !== undefined) updates.name = input.name;
+  if (input.address !== undefined) updates.address = input.address || null;
+  if (input.city !== undefined) updates.city = input.city || null;
+  if (input.countryCode !== undefined) {
+    updates.countryCode = input.countryCode ? input.countryCode.toUpperCase() : null;
+  }
+  if (input.cuisines !== undefined) updates.cuisines = input.cuisines;
+  if (input.priceLevel !== undefined) updates.priceLevel = input.priceLevel ?? null;
+  if (input.status !== undefined) updates.status = input.status;
+  if (input.ratingHalf !== undefined) updates.ratingHalf = input.ratingHalf ?? null;
+  if (input.notes !== undefined) updates.notes = input.notes || null;
+  updates.updatedAt = new Date();
+
+  const [updated] = await db
+    .update(userRestaurants)
+    .set(updates)
+    .where(and(eq(userRestaurants.id, restaurantId), eq(userRestaurants.userId, userId)))
+    .returning({ id: userRestaurants.id });
+
+  if (!updated) return null;
+  return getUserRestaurantById(userId, updated.id);
+}
+
+export async function deleteUserRestaurant(
+  userId: string,
+  restaurantId: string,
+): Promise<{ deletedId: string } | null> {
+  const [deleted] = await db
+    .delete(userRestaurants)
+    .where(and(eq(userRestaurants.id, restaurantId), eq(userRestaurants.userId, userId)))
+    .returning({ id: userRestaurants.id });
+
+  return deleted ? { deletedId: deleted.id } : null;
 }
 
 /**
@@ -165,14 +206,14 @@ export async function createUserRestaurant(
       userId,
       placeId: placeRow.id,
       name: input.name,
-      address: input.address ?? null,
-      city: input.city ?? null,
-      countryCode: input.countryCode ?? null,
+      address: input.address?.trim() || null,
+      city: input.city?.trim() || null,
+      countryCode: input.countryCode?.trim().toUpperCase() || null,
       cuisines: input.cuisines,
       priceLevel: input.priceLevel ?? null,
       status: input.status,
       ratingHalf: input.ratingHalf ?? null,
-      notes: input.notes ?? null,
+      notes: input.notes?.trim() || null,
     })
     .onConflictDoNothing({
       target: [userRestaurants.userId, userRestaurants.placeId],
