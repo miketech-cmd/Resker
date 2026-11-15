@@ -1,0 +1,87 @@
+name: CI & Weekly Backup
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Sundays at 10:00 UTC
+    - cron: "0 10 * * 0"
+  workflow_dispatch:
+
+jobs:
+  ci:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Formatting check
+        run: pnpm format:check
+
+      - name: TypeScript typecheck
+        run: pnpm typecheck
+
+      - name: ESLint
+        run: pnpm lint
+
+      - name: Unit & component tests
+        run: pnpm test
+
+      - name: Production build check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/resker' }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET || 'ci-placeholder-secret-000000000000000000000000' }}
+          BETTER_AUTH_URL: http://localhost:3000
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY || 'ci-placeholder-server-key' }}
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '' }}
+          NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || '' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET || 'ci-placeholder-cron-secret-000000' }}
+        run: pnpm build
+
+  weekly-backup:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check DATABASE_URL secret
+        id: check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL secret is not configured; skipping pg_dump."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install PostgreSQL client
+        if: steps.check.outputs.configured == 'true'
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Dump Neon Postgres database
+        if: steps.check.outputs.configured == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
+          pg_dump "$DATABASE_URL" --no-owner --no-acl -Fc -f "resker-${TIMESTAMP}.dump"
+
+      - name: Upload database backup artifact
+        if: steps.check.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-postgres-backup-${{ github.run_number }}
+          path: resker-*.dump
+          retention-days: 30

@@ -5,6 +5,8 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { ThemeProvider, useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { OfflineBanner } from "@/components/pwa/offline-banner";
+import { SwRegister } from "@/components/pwa/sw-register";
 import { Toaster } from "@/components/ui/toast";
 import { createIdbPersister, makeQueryClient } from "@/lib/query-client";
 
@@ -35,6 +37,8 @@ export function Providers({ children }: { children: ReactNode }) {
   const content = (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <ThemeColorMeta />
+      <SwRegister />
+      <OfflineBanner />
       {children}
       <Toaster />
     </ThemeProvider>

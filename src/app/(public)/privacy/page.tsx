@@ -7,7 +7,7 @@ export default function PrivacyPage() {
         ← Back
       </Link>
       <h1 className="mt-4 font-serif text-3xl font-medium tracking-tight">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-muted">Last updated: November 12, 2026</p>
+      <p className="mt-2 text-sm text-muted">Last updated: November 15, 2026</p>
 
       <div className="mt-6 space-y-4 text-sm leading-relaxed text-ink/90">
         <p>
@@ -15,8 +15,9 @@ export default function PrivacyPage() {
           along with the restaurants, ratings, visits, and lists you explicitly save.
         </p>
         <p>
-          Your saved restaurant records, visits, and tasting notes are private to your account
-          unless you explicitly share a list (P1).
+          Your saved restaurant records, personal ratings, visit history, and tasting notes remain
+          private to your account. If you choose to publish a list as public, only that list&apos;s
+          name, description, optional city, and place entries are visible to visitors.
         </p>
         <p>
           Map rendering and place lookup use Google Maps Platform and are subject to the{" "}

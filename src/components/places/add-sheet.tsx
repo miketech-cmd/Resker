@@ -67,8 +67,14 @@ export function AddSheet() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const isOpen = searchParams.get("add") === "1";
-  const sharedUrlParam = searchParams.get("url") ?? searchParams.get("text") ?? "";
+  const rawShareUrl = searchParams.get("url") ?? "";
+  const rawShareText = searchParams.get("text") ?? "";
+  const rawShareTitle = searchParams.get("title") ?? "";
+  const extractedShareUrl =
+    rawShareUrl.trim() || rawShareText.match(/https?:\/\/[^\s<>()]+/i)?.[0]?.trim() || "";
+  const shareSearchFallback = !extractedShareUrl ? rawShareTitle.trim() || rawShareText.trim() : "";
+  const hasSharePayload = Boolean(extractedShareUrl || shareSearchFallback);
+  const isOpen = searchParams.get("add") === "1" || hasSharePayload;
 
   const [tab, setTab] = useState<"link" | "search">("link");
   const [linkInput, setLinkInput] = useState("");
@@ -158,15 +164,31 @@ export function AddSheet() {
     }
   }, []);
 
-  // Support Android PWA Share Target (?add=1&url=... or ?text=...)
+  // Support Android PWA Share Target (?add=1&url=... or ?text=... / ?title=...)
   useEffect(() => {
-    if (!isOpen || !sharedUrlParam) return;
-    if (handledShareRef.current === sharedUrlParam) return;
-    handledShareRef.current = sharedUrlParam;
-    setTab("link");
-    setLinkInput(sharedUrlParam);
-    void resolveLink(sharedUrlParam);
-  }, [isOpen, resolveLink, sharedUrlParam]);
+    if (!isOpen || !hasSharePayload) return;
+    const shareKey = `${extractedShareUrl}|${shareSearchFallback}`;
+    if (handledShareRef.current === shareKey) return;
+    handledShareRef.current = shareKey;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      if (extractedShareUrl) {
+        setTab("link");
+        setLinkInput(extractedShareUrl);
+        void resolveLink(extractedShareUrl);
+      } else if (shareSearchFallback) {
+        setTab("search");
+        setSearchInput(shareSearchFallback);
+      }
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [extractedShareUrl, hasSharePayload, isOpen, resolveLink, shareSearchFallback]);
 
   // 250ms debounced Autocomplete proxy in Search tab
   useEffect(() => {

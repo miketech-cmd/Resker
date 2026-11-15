@@ -249,6 +249,11 @@ export function ConfirmPlaceForm({
         <Button type="submit" size="lg" className="w-full" disabled={saveMutation.isPending}>
           {saveMutation.isPending ? "Saving..." : `Save to ${STATUS_LABELS[status]}`}
         </Button>
+        {prefill.googlePlaceId ? (
+          <p className="mt-1.5 text-center text-[11px] text-muted">
+            Place details powered by Google.
+          </p>
+        ) : null}
       </div>
     </form>
   );

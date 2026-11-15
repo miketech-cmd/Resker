@@ -7,7 +7,7 @@ export default function TermsPage() {
         ← Back
       </Link>
       <h1 className="mt-4 font-serif text-3xl font-medium tracking-tight">Terms of Service</h1>
-      <p className="mt-2 text-sm text-muted">Last updated: November 12, 2026</p>
+      <p className="mt-2 text-sm text-muted">Last updated: November 15, 2026</p>
 
       <div className="mt-6 space-y-4 text-sm leading-relaxed text-ink/90">
         <p>
