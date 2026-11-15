@@ -68,7 +68,6 @@ export function FilterSheet({
 
   function handleApply() {
     onApply(draft);
-    onOpenChange(false);
   }
 
   return (

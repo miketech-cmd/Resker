@@ -188,7 +188,12 @@ export function PlacesLibrary({
   }
 
   function closeFilterSheet() {
-    updateUrlFilters(filters, { openFilter: false });
+    const current = new URLSearchParams(searchParams.toString());
+    if (!current.has("filter") && !current.has("section")) return;
+    current.delete("filter");
+    current.delete("section");
+    const qs = current.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
   // Status tab counts reflect all active non-status filters cleanly
@@ -438,8 +443,8 @@ export function PlacesLibrary({
                         aria-pressed={active}
                         onClick={() => handleGroupByChange(choice.id)}
                         className={cn(
-                          "inline-flex min-h-9 cursor-pointer items-center gap-1 rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
-                          active ? "bg-surface text-ink shadow-2xs" : "text-muted hover:text-ink",
+                          "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                          active ? "bg-ink text-bg shadow-2xs" : "text-muted hover:text-ink",
                         )}
                       >
                         {choice.id === "none" ? (
@@ -557,11 +562,11 @@ export function PlacesLibrary({
               }
             />
           ) : groupedSections ? (
-            <div className="space-y-4">
-              {/* Quick-jump strip + group sort toggle */}
-              <div className="space-y-2 rounded-2xl border border-border bg-surface-elevated/45 p-3">
+            <div className="space-y-6 pt-1">
+              {/* Sleek borderless quick-jump bar + sort/collapse controls */}
+              <div className="space-y-2.5 border-b border-border/70 pb-3">
                 <div className="flex items-center justify-between gap-2 text-xs text-muted">
-                  <span>
+                  <span className="font-medium">
                     {groupedSections.length}{" "}
                     {groupedSections.length === 1
                       ? FACET_REGISTRY[effectiveFilters.groupBy as FacetId].label.toLowerCase()
@@ -569,7 +574,8 @@ export function PlacesLibrary({
                           effectiveFilters.groupBy as FacetId
                         ].pluralLabel.toLowerCase()}
                     {" · "}
-                    {filteredRestaurants.length} spots
+                    {filteredRestaurants.length}{" "}
+                    {filteredRestaurants.length === 1 ? "spot" : "spots"}
                   </span>
                   <div className="flex items-center gap-2">
                     {FACET_REGISTRY[effectiveFilters.groupBy as FacetId].supportsGroupSort ? (
@@ -612,7 +618,7 @@ export function PlacesLibrary({
                             .getElementById(`facet-group-${group.key}`)
                             ?.scrollIntoView({ behavior: "smooth", block: "start" });
                         }}
-                        className="inline-flex min-h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 text-xs font-medium text-ink hover:border-accent/50"
+                        className="inline-flex min-h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent"
                       >
                         {group.iconKey ? (
                           <FoodIcon name={group.iconKey} className="size-3.5 text-accent" />
@@ -625,8 +631,8 @@ export function PlacesLibrary({
                 ) : null}
               </div>
 
-              {/* Grouped Sections */}
-              <div className="space-y-4">
+              {/* Distinct Editorial Chapter Sections */}
+              <div className="space-y-8">
                 {groupedSections.map((group) => {
                   const collapsed = Boolean(collapsedGroups[group.key]);
                   const activeFacetId = effectiveFilters.groupBy as FacetId;
@@ -635,33 +641,36 @@ export function PlacesLibrary({
                     <section
                       key={group.key}
                       id={`facet-group-${group.key}`}
-                      className="scroll-mt-4 space-y-2.5"
+                      className="scroll-mt-4"
                     >
-                      <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-surface px-3.5 py-2.5">
+                      <div className="flex items-center justify-between gap-2 px-1">
                         <button
                           type="button"
                           aria-expanded={!collapsed}
                           onClick={() => toggleGroupCollapsed(group.key)}
-                          className="flex min-h-9 min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left focus-visible:outline-2 focus-visible:outline-ring"
+                          className="flex min-h-10 min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left focus-visible:outline-2 focus-visible:outline-ring"
                         >
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-elevated text-accent">
-                            {group.iconKey ? (
-                              <FoodIcon name={group.iconKey} className="size-4" />
-                            ) : (
-                              <MapPin className="size-4" aria-hidden="true" />
-                            )}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <h2 className="truncate font-serif text-lg font-medium text-ink">
-                                {group.label}
-                              </h2>
-                              {group.subtitle ? (
-                                <span className="text-xs text-muted">{group.subtitle}</span>
-                              ) : null}
-                            </div>
-                          </div>
-                          <span className="rounded-full bg-surface-elevated px-2.5 py-0.5 text-xs font-medium text-muted tabular-nums">
+                          <span
+                            aria-hidden="true"
+                            className="h-5 w-1 shrink-0 rounded-full bg-accent"
+                          />
+                          {group.iconKey ? (
+                            <FoodIcon
+                              name={group.iconKey}
+                              className="size-5 shrink-0 text-accent"
+                            />
+                          ) : (
+                            <MapPin className="size-4.5 shrink-0 text-accent" aria-hidden="true" />
+                          )}
+                          <h2 className="truncate font-serif text-xl font-medium tracking-tight text-ink sm:text-2xl">
+                            {group.label}
+                          </h2>
+                          {group.subtitle ? (
+                            <span className="shrink-0 text-xs font-medium tracking-wide text-muted uppercase">
+                              {group.subtitle}
+                            </span>
+                          ) : null}
+                          <span className="shrink-0 rounded-full bg-accent/15 px-2.5 py-0.5 text-xs font-semibold text-accent tabular-nums">
                             {group.items.length}
                           </span>
                           {collapsed ? (
@@ -686,7 +695,7 @@ export function PlacesLibrary({
                                 ),
                               )
                             }
-                            className="inline-flex min-h-8 shrink-0 cursor-pointer items-center rounded-full border border-border px-2.5 text-xs font-medium text-muted hover:border-accent/50 hover:text-ink"
+                            className="inline-flex min-h-8 shrink-0 cursor-pointer items-center rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:border-accent/50 hover:text-ink"
                             title={`Filter only ${group.label}`}
                           >
                             Filter only
@@ -695,15 +704,17 @@ export function PlacesLibrary({
                       </div>
 
                       {!collapsed ? (
-                        <div className="space-y-3">
-                          {group.items.map((item) => (
-                            <PlaceCard
-                              key={`${group.key}-${item.id}`}
-                              item={item}
-                              highlighted={highlightId === item.id}
-                              onQuickFilter={handleQuickFilter}
-                            />
-                          ))}
+                        <div className="mt-2.5 rounded-2xl border border-border/75 bg-surface-elevated/45 p-2.5 sm:p-3">
+                          <div className="space-y-2.5">
+                            {group.items.map((item) => (
+                              <PlaceCard
+                                key={`${group.key}-${item.id}`}
+                                item={item}
+                                highlighted={highlightId === item.id}
+                                onQuickFilter={handleQuickFilter}
+                              />
+                            ))}
+                          </div>
                         </div>
                       ) : null}
                     </section>
