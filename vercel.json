@@ -2,5 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "regions": ["pdx1"],
-  "buildCommand": "pnpm vercel-build"
+  "buildCommand": "pnpm vercel-build",
+  "crons": [
+    {
+      "path": "/api/cron/refresh-locations",
+      "schedule": "0 9 * * *"
+    }
+  ]
 }

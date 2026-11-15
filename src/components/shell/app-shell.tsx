@@ -4,16 +4,22 @@ import { Bookmark, List, MapPin, Plus, User } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 
 import { FoodIcon } from "@/components/icons/food-icons";
 import { Button } from "@/components/ui/button";
+import { buildFilteredHref, useSharedFilters } from "@/lib/places/filter-store";
 import { cn } from "@/lib/utils";
 import type { AuthenticatedUser } from "@/server/auth-guard";
 
 const AddSheet = dynamic(() => import("@/components/places/add-sheet").then((m) => m.AddSheet), {
   ssr: false,
 });
+
+const PersistentMap = dynamic(
+  () => import("@/components/map/persistent-map").then((m) => m.PersistentMap),
+  { ssr: false },
+);
 
 const NAV_ITEMS = [
   { href: "/places", label: "Places", Icon: Bookmark },
@@ -56,8 +62,16 @@ function AddButtonTrigger({ variant }: { variant: "mobile" | "desktop" }) {
 
 export function AppShell({ user, children }: { user: AuthenticatedUser; children: ReactNode }) {
   const pathname = usePathname();
+  const [hasVisitedMap, setHasVisitedMap] = useState(() => pathname === "/map");
 
+  if (pathname === "/map" && !hasVisitedMap) {
+    setHasVisitedMap(true);
+  }
+
+  const sharedFilters = useSharedFilters();
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const resolveNavHref = (href: string) =>
+    href === "/places" || href === "/map" ? buildFilteredHref(href, sharedFilters) : href;
 
   return (
     <div className="flex min-h-dvh bg-bg text-ink">
@@ -94,7 +108,7 @@ export function AppShell({ user, children }: { user: AuthenticatedUser; children
             return (
               <Link
                 key={href}
-                href={href}
+                href={resolveNavHref(href)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
@@ -144,7 +158,7 @@ export function AppShell({ user, children }: { user: AuthenticatedUser; children
             return (
               <Link
                 key={href}
-                href={href}
+                href={resolveNavHref(href)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
@@ -192,6 +206,12 @@ export function AppShell({ user, children }: { user: AuthenticatedUser; children
       <Suspense fallback={null}>
         <AddSheet />
       </Suspense>
+
+      {hasVisitedMap ? (
+        <Suspense fallback={null}>
+          <PersistentMap isActive={pathname === "/map"} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

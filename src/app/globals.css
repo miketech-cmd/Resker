@@ -108,6 +108,15 @@
   animation: steam-wisp 300ms ease-out forwards;
 }
 
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-steam-wisp {
     animation: none;

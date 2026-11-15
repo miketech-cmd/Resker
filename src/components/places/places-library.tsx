@@ -16,7 +16,7 @@ import {
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { FoodIcon } from "@/components/icons/food-icons";
 import { PlaceCard } from "@/components/places/place-card";
@@ -44,6 +44,7 @@ import {
   setSingleFacetValue,
   toggleFacetValue,
 } from "@/lib/places/filter-state";
+import { setSharedFilters } from "@/lib/places/filter-store";
 import { useRestaurantsQuery, type UserRestaurantItem } from "@/lib/queries/restaurants";
 import { cn } from "@/lib/utils";
 import { RESTAURANT_STATUSES, STATUS_LABELS, type RestaurantStatus } from "@/lib/validation/places";
@@ -142,8 +143,13 @@ export function PlacesLibrary({
     [deferredQuery, filters],
   );
 
+  useEffect(() => {
+    setSharedFilters(filters);
+  }, [filters]);
+
   const updateUrlFilters = useCallback(
     (next: LibraryFilters, extra?: { openFilter?: boolean; section?: FacetId | null }) => {
+      setSharedFilters(next);
       const serialized = serializeFiltersToSearchParams(
         next,
         new URLSearchParams(searchParams.toString()),

@@ -371,8 +371,18 @@ export function ListDetail({ initialDetail }: { initialDetail: ListDetailRespons
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="rounded-2xl border border-border bg-surface-elevated/55 px-4 py-3 text-xs text-muted dark:bg-[#191512]">
-            Interactive pin map for this list connects in Phase 6. Quick Maps links below:
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface-elevated/55 px-4 py-3 dark:bg-[#191512]">
+            <p className="text-xs text-muted">
+              Plot these {items.length} {items.length === 1 ? "spot" : "spots"} together or launch
+              turn-by-turn directions below.
+            </p>
+            <Link
+              href={`/map?list=${list.id}`}
+              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-medium text-accent-ink shadow-2xs transition-opacity hover:opacity-95 focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <MapIcon className="size-3.5" aria-hidden="true" />
+              Open interactive map
+            </Link>
           </div>
           <ul className="space-y-2.5">
             {items.map((item) => (
