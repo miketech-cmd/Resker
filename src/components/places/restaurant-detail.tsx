@@ -1,21 +1,15 @@
 "use client";
 
-import {
-  ArrowLeft,
-  Calendar,
-  ExternalLink,
-  MapPin,
-  Navigation,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, ExternalLink, MapPin, Navigation, Pencil, Trash2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { FoodIcon } from "@/components/icons/food-icons";
 import { CityInput } from "@/components/places/city-input";
 import { CuisineTagEditor } from "@/components/places/cuisine-tag-editor";
+import { VisitTimeline } from "@/components/places/visit-timeline";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
@@ -31,6 +25,7 @@ import {
   useUpdateRestaurantMutation,
   type UserRestaurantItem,
 } from "@/lib/queries/restaurants";
+import { useRestaurantVisitsQuery, type VisitItem } from "@/lib/queries/visits";
 import { cn } from "@/lib/utils";
 import {
   RESTAURANT_STATUSES,
@@ -38,6 +33,11 @@ import {
   updateRestaurantSchema,
   type RestaurantStatus,
 } from "@/lib/validation/places";
+
+const LogVisitSheet = dynamic(
+  () => import("@/components/places/log-visit-sheet").then((mod) => mod.LogVisitSheet),
+  { ssr: false },
+);
 
 const STATUS_ACTIVE_STYLES: Record<RestaurantStatus, string> = {
   to_try: "border-to-try bg-to-try-bg text-to-try-ink",
@@ -188,18 +188,45 @@ function EditRestaurantSheet({
   );
 }
 
-export function RestaurantDetail({ initialRestaurant }: { initialRestaurant: UserRestaurantItem }) {
+export function RestaurantDetail({
+  initialRestaurant,
+  initialVisits = [],
+}: {
+  initialRestaurant: UserRestaurantItem;
+  initialVisits?: VisitItem[];
+}) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: restaurant = initialRestaurant } = useRestaurantDetailQuery(
     initialRestaurant.id,
     initialRestaurant,
   );
+  const { data: visits = initialVisits } = useRestaurantVisitsQuery(restaurant.id, initialVisits);
   const updateMutation = useUpdateRestaurantMutation();
   const deleteMutation = useDeleteRestaurantMutation();
 
   const [editOpen, setEditOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [editingVisit, setEditingVisit] = useState<VisitItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
+
+  const isUrlLogOpen = searchParams.get("log") === "1";
+  const effectiveLogOpen = logOpen || isUrlLogOpen;
+
+  function handleLogOpenChange(nextOpen: boolean) {
+    setLogOpen(nextOpen);
+    if (!nextOpen) {
+      setEditingVisit(null);
+      if (searchParams.has("log")) {
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.delete("log");
+        const qs = nextParams.toString();
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      }
+    }
+  }
 
   const effectiveNotes = notesDraft ?? restaurant.notes ?? "";
   const notesDirty = notesDraft !== null && notesDraft !== (restaurant.notes ?? "");
@@ -446,26 +473,19 @@ export function RestaurantDetail({ initialRestaurant }: { initialRestaurant: Use
         </form>
       </Card>
 
-      {/* Visits Summary (Ready for Phase 4) */}
-      <Card className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-surface-elevated text-accent">
-            <Calendar className="size-4" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-sm font-medium text-ink">
-              {restaurant.visitCount === 0
-                ? "No visits logged yet"
-                : `${restaurant.visitCount} ${restaurant.visitCount === 1 ? "visit" : "visits"} logged`}
-            </p>
-            <p className="text-xs text-muted">
-              {restaurant.lastVisitedOn
-                ? `Last visited ${restaurant.lastVisitedOn}`
-                : "Visit history & dishes arrive in Phase 4."}
-            </p>
-          </div>
-        </div>
-      </Card>
+      {/* Visits & Ordered Dishes */}
+      <VisitTimeline
+        restaurant={restaurant}
+        visits={visits}
+        onOpenLogNew={() => {
+          setEditingVisit(null);
+          setLogOpen(true);
+        }}
+        onOpenEdit={(visit) => {
+          setEditingVisit(visit);
+          setLogOpen(true);
+        }}
+      />
 
       {/* Remove Spot */}
       <div className="pt-2">
@@ -514,6 +534,20 @@ export function RestaurantDetail({ initialRestaurant }: { initialRestaurant: Use
           restaurant={restaurant}
           open={editOpen}
           onOpenChange={setEditOpen}
+        />
+      ) : null}
+
+      {effectiveLogOpen ? (
+        <LogVisitSheet
+          key={
+            editingVisit
+              ? `edit-${editingVisit.id}-${editingVisit.updatedAt}`
+              : `new-${restaurant.id}`
+          }
+          restaurant={restaurant}
+          visit={editingVisit}
+          open={effectiveLogOpen}
+          onOpenChange={handleLogOpenChange}
         />
       ) : null}
     </div>

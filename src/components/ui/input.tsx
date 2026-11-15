@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, LabelHTMLAttributes } from "react";
+import type { ComponentPropsWithRef, LabelHTMLAttributes } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -8,7 +8,7 @@ export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElem
   );
 }
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...props }: ComponentPropsWithRef<"input">) {
   return (
     <input
       className={cn(

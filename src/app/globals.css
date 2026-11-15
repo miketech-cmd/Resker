@@ -28,12 +28,12 @@
 
 .dark {
   color-scheme: dark;
-  --bg: #14110f;
-  --surface: #1e1a17;
-  --surface-elevated: #28221e;
+  --bg: #13100e;
+  --surface: #241f1b;
+  --surface-elevated: #2f2823;
   --ink: #f3eee8;
-  --muted: #a39a90;
-  --border: #322b26;
+  --muted: #a69c92;
+  --border: #3d342d;
   --accent: #f06a43;
   --accent-ink: #14110f;
   --status-to-try: #f0b455;

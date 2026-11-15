@@ -32,8 +32,8 @@ export function PlaceCard({
   return (
     <Card
       className={cn(
-        "transition-colors hover:border-border/90",
-        highlighted && "border-accent ring-2 ring-accent/25",
+        "transition-colors hover:border-border/90 dark:border-[#413830] dark:hover:border-[#564a40]",
+        highlighted && "border-accent ring-2 ring-accent/25 dark:border-accent",
       )}
     >
       <div className="flex items-start gap-3.5">
@@ -88,7 +88,7 @@ export function PlaceCard({
                   key={tag}
                   type="button"
                   onClick={() => onQuickFilter("cuisine", normalizeFacetKey(tag))}
-                  className="inline-flex min-h-7 cursor-pointer items-center rounded-full border border-border/80 bg-surface px-2.5 py-0.5 font-medium text-muted transition-colors hover:border-accent/50 hover:text-ink focus-visible:outline-2 focus-visible:outline-ring"
+                  className="inline-flex min-h-7 cursor-pointer items-center rounded-full border border-border/80 bg-surface px-2.5 py-0.5 font-medium text-muted transition-colors hover:border-accent/50 hover:text-ink focus-visible:outline-2 focus-visible:outline-ring dark:bg-surface-elevated/60"
                   title={`Filter by ${tag}`}
                 >
                   {tag}
@@ -96,7 +96,7 @@ export function PlaceCard({
               ) : (
                 <span
                   key={tag}
-                  className="inline-flex items-center rounded-full border border-border/80 px-2 py-0.5"
+                  className="inline-flex items-center rounded-full border border-border/80 px-2 py-0.5 dark:bg-surface-elevated/60"
                 >
                   {tag}
                 </span>

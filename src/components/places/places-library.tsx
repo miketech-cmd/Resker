@@ -704,7 +704,7 @@ export function PlacesLibrary({
                       </div>
 
                       {!collapsed ? (
-                        <div className="mt-2.5 rounded-2xl border border-border/75 bg-surface-elevated/45 p-2.5 sm:p-3">
+                        <div className="mt-2.5 rounded-2xl border border-border/80 bg-surface-elevated/55 p-2.5 sm:p-3 dark:border-border/75 dark:bg-[#191512]">
                           <div className="space-y-2.5">
                             {group.items.map((item) => (
                               <PlaceCard
