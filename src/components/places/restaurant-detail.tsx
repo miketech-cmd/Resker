@@ -1,6 +1,14 @@
 "use client";
 
-import { ArrowLeft, ExternalLink, MapPin, Navigation, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  BookmarkPlus,
+  ExternalLink,
+  MapPin,
+  Navigation,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -36,6 +44,11 @@ import {
 
 const LogVisitSheet = dynamic(
   () => import("@/components/places/log-visit-sheet").then((mod) => mod.LogVisitSheet),
+  { ssr: false },
+);
+
+const AddToListsSheet = dynamic(
+  () => import("@/components/lists/add-to-lists-sheet").then((mod) => mod.AddToListsSheet),
   { ssr: false },
 );
 
@@ -207,6 +220,7 @@ export function RestaurantDetail({
   const deleteMutation = useDeleteRestaurantMutation();
 
   const [editOpen, setEditOpen] = useState(false);
+  const [listsOpen, setListsOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [editingVisit, setEditingVisit] = useState<VisitItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -296,16 +310,28 @@ export function RestaurantDetail({
           Places
         </Link>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setEditOpen(true)}
-          className="gap-1.5"
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-          Edit
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setListsOpen(true)}
+            className="gap-1.5"
+          >
+            <BookmarkPlus className="size-3.5" aria-hidden="true" />
+            Lists
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditOpen(true)}
+            className="gap-1.5"
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+            Edit
+          </Button>
+        </div>
       </div>
 
       {/* Hero Summary Card */}
@@ -549,6 +575,10 @@ export function RestaurantDetail({
           open={effectiveLogOpen}
           onOpenChange={handleLogOpenChange}
         />
+      ) : null}
+
+      {listsOpen ? (
+        <AddToListsSheet restaurant={restaurant} open={listsOpen} onOpenChange={setListsOpen} />
       ) : null}
     </div>
   );

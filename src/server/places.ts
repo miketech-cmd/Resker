@@ -34,7 +34,7 @@ export interface UserRestaurantSummary {
   updatedAt: string;
 }
 
-function serializeRestaurantRow(row: {
+export function serializeRestaurantRow(row: {
   id: string;
   placeId: string;
   googlePlaceId: string;
@@ -62,7 +62,7 @@ function serializeRestaurantRow(row: {
   };
 }
 
-const RESTAURANT_SELECT_COLUMNS = {
+export const RESTAURANT_SELECT_COLUMNS = {
   id: userRestaurants.id,
   placeId: userRestaurants.placeId,
   googlePlaceId: places.googlePlaceId,

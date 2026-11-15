@@ -1,20 +1,15 @@
-import { EmptyState } from "@/components/ui/empty-state";
+import { redirect } from "next/navigation";
 
-export default function ListsPage() {
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-      <header className="mb-5">
-        <h1 className="font-serif text-3xl font-medium tracking-tight text-ink">Lists</h1>
-        <p className="mt-1 text-sm text-muted">
-          Group spots into collections like &ldquo;NY 2026 Travel&rdquo; or &ldquo;Date
-          Night&rdquo;.
-        </p>
-      </header>
+import { ListsOverview } from "@/components/lists/lists-overview";
+import { getOptionalUser } from "@/server/auth-guard";
+import { getUserLists } from "@/server/lists";
 
-      <EmptyState
-        title="No lists yet"
-        description="Custom lists, food icons, and drag-to-reorder arrive in Phase 5."
-      />
-    </div>
-  );
+export default async function ListsPage() {
+  const user = await getOptionalUser();
+  if (!user) {
+    redirect("/signin");
+  }
+
+  const initialLists = await getUserLists(user.id);
+  return <ListsOverview initialLists={initialLists} />;
 }

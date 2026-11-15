@@ -53,14 +53,21 @@ const DynamicFilterSheet = dynamic(
   { ssr: false },
 );
 
+const DynamicAddToListsSheet = dynamic(
+  () => import("@/components/lists/add-to-lists-sheet").then((mod) => mod.AddToListsSheet),
+  { ssr: false },
+);
+
 function VirtualizedPlaceCards({
   items,
   highlightId,
   onQuickFilter,
+  onOpenLists,
 }: {
   items: UserRestaurantItem[];
   highlightId: string | null;
   onQuickFilter: (facetId: FacetId, key: string) => void;
+  onOpenLists: (item: UserRestaurantItem) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const virtualizer = useWindowVirtualizer({
@@ -94,6 +101,7 @@ function VirtualizedPlaceCards({
                 item={item}
                 highlighted={highlightId === item.id}
                 onQuickFilter={onQuickFilter}
+                onOpenLists={onOpenLists}
               />
             </div>
           );
@@ -124,6 +132,7 @@ export function PlacesLibrary({
   const deferredQuery = useDeferredValue(effectiveQuery);
 
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [listTarget, setListTarget] = useState<UserRestaurantItem | null>(null);
 
   const effectiveFilters = useMemo<LibraryFilters>(
     () => ({
@@ -712,6 +721,7 @@ export function PlacesLibrary({
                                 item={item}
                                 highlighted={highlightId === item.id}
                                 onQuickFilter={handleQuickFilter}
+                                onOpenLists={setListTarget}
                               />
                             ))}
                           </div>
@@ -727,6 +737,7 @@ export function PlacesLibrary({
               items={filteredRestaurants}
               highlightId={highlightId}
               onQuickFilter={handleQuickFilter}
+              onOpenLists={setListTarget}
             />
           ) : (
             <div className="space-y-3">
@@ -736,6 +747,7 @@ export function PlacesLibrary({
                   item={item}
                   highlighted={highlightId === item.id}
                   onQuickFilter={handleQuickFilter}
+                  onOpenLists={setListTarget}
                 />
               ))}
             </div>
@@ -756,6 +768,16 @@ export function PlacesLibrary({
           onApply={(next) => {
             setSearchDraft(next.q);
             updateUrlFilters(next, { openFilter: false });
+          }}
+        />
+      ) : null}
+
+      {listTarget ? (
+        <DynamicAddToListsSheet
+          restaurant={listTarget}
+          open={Boolean(listTarget)}
+          onOpenChange={(open) => {
+            if (!open) setListTarget(null);
           }}
         />
       ) : null}

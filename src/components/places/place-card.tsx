@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, MapPin } from "lucide-react";
+import { BookmarkPlus, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -19,10 +19,12 @@ export function PlaceCard({
   item,
   highlighted = false,
   onQuickFilter,
+  onOpenLists,
 }: {
   item: UserRestaurantItem;
   highlighted?: boolean;
   onQuickFilter?: (facetId: FacetId, key: string) => void;
+  onOpenLists?: (item: UserRestaurantItem) => void;
 }) {
   const router = useRouter();
   const priceLabel = formatPriceLevel(item.priceLevel);
@@ -129,15 +131,28 @@ export function PlaceCard({
             >
               {item.address ?? "View spot details"}
             </Link>
-            <a
-              href={buildMapsPlaceUrl(item)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full px-2 font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-            >
-              Maps
-              <ExternalLink className="size-3" aria-hidden="true" />
-            </a>
+            <div className="flex shrink-0 items-center gap-1">
+              {onOpenLists ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenLists(item)}
+                  aria-label={`Add ${item.name} to lists`}
+                  className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full px-2 font-medium text-muted transition-colors hover:bg-surface-elevated hover:text-ink focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  <BookmarkPlus className="size-3.5" aria-hidden="true" />
+                  Lists
+                </button>
+              ) : null}
+              <a
+                href={buildMapsPlaceUrl(item)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full px-2 font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                Maps
+                <ExternalLink className="size-3" aria-hidden="true" />
+              </a>
+            </div>
           </div>
         </div>
       </div>
