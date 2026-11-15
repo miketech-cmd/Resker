@@ -2,7 +2,7 @@ import { updateListSchema } from "@/lib/validation/lists";
 import { uuidParamSchema } from "@/lib/validation/places";
 import { handlePlaceApiError } from "@/server/api-errors";
 import { apiError, privateJson, requireUser } from "@/server/auth-guard";
-import { deleteUserList, getListDetail, updateUserList } from "@/server/lists";
+import { canReadList, deleteUserList, getListDetail, updateUserList } from "@/server/lists";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -59,6 +59,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const list = await updateUserList(user.id, listId, parsed.data);
     if (!list) {
+      if (await canReadList(user.id, listId)) {
+        return apiError(403, "FORBIDDEN", "Only the list owner can update list settings.");
+      }
       return apiError(404, "LIST_NOT_FOUND", "List not found.");
     }
 
@@ -78,6 +81,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
     const deleted = await deleteUserList(user.id, listId);
     if (!deleted) {
+      if (await canReadList(user.id, listId)) {
+        return apiError(403, "FORBIDDEN", "Only the list owner can delete this list.");
+      }
       return apiError(404, "LIST_NOT_FOUND", "List not found.");
     }
 

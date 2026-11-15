@@ -37,6 +37,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!result) {
       return apiError(404, "NOT_FOUND", "List or item not found.");
     }
+    if ("forbidden" in result) {
+      return apiError(403, "FORBIDDEN", "Only list editors or owners can reorder spots.");
+    }
 
     return privateJson(result);
   } catch (error) {

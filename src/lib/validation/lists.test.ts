@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   clonePublicListSchema,
   createListSchema,
+  inviteListMemberSchema,
   listItemActionSchema,
   publicListsFilterSchema,
   reorderListItemSchema,
   savePublicSpotSchema,
+  updateListMemberRoleSchema,
   updateListSchema,
 } from "@/lib/validation/lists";
 
@@ -58,5 +60,30 @@ describe("list validation schemas", () => {
         position: "a0V",
       }).success,
     ).toBe(true);
+  });
+
+  it("validates Phase 8 share slug actions and collaborator invite/role schemas", () => {
+    expect(updateListSchema.safeParse({ regenerateSlug: true }).success).toBe(true);
+    expect(updateListSchema.safeParse({ revokeSlug: true }).success).toBe(true);
+
+    const inviteParsed = inviteListMemberSchema.safeParse({
+      username: "  @Alice_Chef ",
+      role: "viewer",
+    });
+    expect(inviteParsed.success).toBe(true);
+    if (inviteParsed.success) {
+      expect(inviteParsed.data.username).toBe("alice_chef");
+      expect(inviteParsed.data.role).toBe("viewer");
+    }
+
+    const defaultRoleInvite = inviteListMemberSchema.safeParse({ username: "bob" });
+    expect(defaultRoleInvite.success).toBe(true);
+    if (defaultRoleInvite.success) {
+      expect(defaultRoleInvite.data.role).toBe("editor");
+    }
+
+    expect(inviteListMemberSchema.safeParse({ username: "x" }).success).toBe(false);
+    expect(updateListMemberRoleSchema.safeParse({ role: "editor" }).success).toBe(true);
+    expect(updateListMemberRoleSchema.safeParse({ role: "owner" }).success).toBe(false);
   });
 });

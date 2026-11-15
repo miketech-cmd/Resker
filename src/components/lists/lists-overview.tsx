@@ -151,6 +151,11 @@ export function ListsOverview({
                           Public
                         </span>
                       ) : null}
+                      {list.viewerRole && list.viewerRole !== "owner" ? (
+                        <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+                          Shared · {list.viewerRole === "editor" ? "Editor" : "Viewer"}
+                        </span>
+                      ) : null}
                     </div>
                     {list.description ? (
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted">{list.description}</p>
@@ -158,6 +163,11 @@ export function ListsOverview({
                     <p className="mt-1.5 text-xs font-medium text-muted tabular-nums">
                       {list.itemCount} {list.itemCount === 1 ? "spot" : "spots"}
                       {list.isPublic && list.city ? ` · ${list.city}` : ""}
+                      {list.viewerRole && list.viewerRole !== "owner" && list.ownerUsername
+                        ? ` · by @${list.ownerUsername}`
+                        : list.memberCount && list.memberCount > 0
+                          ? ` · ${list.memberCount} ${list.memberCount === 1 ? "collaborator" : "collaborators"}`
+                          : ""}
                     </p>
                   </div>
                 </div>

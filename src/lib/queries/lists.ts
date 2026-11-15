@@ -10,9 +10,22 @@ import {
 import type {
   ClonePublicListInput,
   CreateListInput,
+  InviteListMemberInput,
+  ListMemberRole,
   ReorderListItemInput,
   UpdateListInput,
 } from "@/lib/validation/lists";
+
+export type ListAccessRole = "owner" | "editor" | "viewer";
+
+export interface ListMemberItem {
+  userId: string;
+  username: string | null;
+  name: string;
+  avatarUrl?: string | null;
+  role: ListMemberRole;
+  createdAt: string;
+}
 
 export interface ListSummaryItem {
   id: string;
@@ -27,6 +40,11 @@ export interface ListSummaryItem {
   sourceListId?: string | null;
   itemCount: number;
   restaurantIds: string[];
+  placeIds?: string[];
+  viewerRole?: ListAccessRole;
+  ownerName?: string | null;
+  ownerUsername?: string | null;
+  memberCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -96,11 +114,14 @@ export interface ListRestaurantEntry {
   updatedAt: string;
   position: string;
   addedAt: string;
+  isOwnedByViewer?: boolean;
+  viewerRestaurantId?: string | null;
 }
 
 export interface ListDetailResponse {
   list: ListSummaryItem;
   items: ListRestaurantEntry[];
+  members?: ListMemberItem[];
 }
 
 export const listQueryKeys = {
@@ -355,6 +376,11 @@ export function useAddToListMutation() {
           return { ...list, restaurantIds: nextIds, itemCount: nextIds.length };
         });
       });
+      void queryClient.invalidateQueries({
+        queryKey: listQueryKeys.all,
+        exact: true,
+        refetchType: "none",
+      });
       void queryClient.invalidateQueries({ queryKey: listQueryKeys.detail(listId) });
     },
   });
@@ -390,13 +416,20 @@ export function useRemoveFromListMutation() {
         if (!prev) return prev;
         const nextItems = prev.items.filter((item) => item.id !== userRestaurantId);
         return {
+          ...prev,
           list: {
             ...prev.list,
             restaurantIds: nextItems.map((i) => i.id),
+            placeIds: nextItems.map((i) => i.placeId),
             itemCount: nextItems.length,
           },
           items: nextItems,
         };
+      });
+      void queryClient.invalidateQueries({
+        queryKey: listQueryKeys.all,
+        exact: true,
+        refetchType: "none",
       });
     },
   });
@@ -425,6 +458,7 @@ export function useReorderListItemMutation(listId: string) {
       queryClient.setQueryData<ListDetailResponse>(listQueryKeys.detail(listId), (prev) => {
         if (!prev) return prev;
         return {
+          ...prev,
           list: {
             ...prev.list,
             restaurantIds: nextItems.map((i) => i.id),
@@ -446,6 +480,138 @@ export function useReorderListItemMutation(listId: string) {
           ...prev,
           items: prev.items.map((item) =>
             item.id === payload.userRestaurantId ? { ...item, position } : item,
+          ),
+        };
+      });
+    },
+  });
+}
+
+export function useInviteListMemberMutation(listId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: InviteListMemberInput) => {
+      const res = await fetch(`/api/lists/${encodeURIComponent(listId)}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const payload = await readApiResponse<{ member: ListMemberItem }>(res);
+      return payload.member;
+    },
+    onSuccess: (member) => {
+      queryClient.setQueryData<ListDetailResponse>(listQueryKeys.detail(listId), (prev) => {
+        if (!prev) return prev;
+        const current = prev.members ?? [];
+        const exists = current.some((m) => m.userId === member.userId);
+        const nextMembers = exists
+          ? current.map((m) => (m.userId === member.userId ? member : m))
+          : [...current, member];
+        return {
+          ...prev,
+          list: {
+            ...prev.list,
+            memberCount: nextMembers.length,
+          },
+          members: nextMembers,
+        };
+      });
+      void queryClient.invalidateQueries({
+        queryKey: listQueryKeys.all,
+        exact: true,
+        refetchType: "none",
+      });
+    },
+  });
+}
+
+export function useUpdateListMemberRoleMutation(listId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: ListMemberRole }) => {
+      const res = await fetch(
+        `/api/lists/${encodeURIComponent(listId)}/members/${encodeURIComponent(userId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role }),
+        },
+      );
+      return readApiResponse<{ role: ListMemberRole }>(res);
+    },
+    onSuccess: ({ role }, { userId }) => {
+      queryClient.setQueryData<ListDetailResponse>(listQueryKeys.detail(listId), (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          members: (prev.members ?? []).map((m) => (m.userId === userId ? { ...m, role } : m)),
+        };
+      });
+    },
+  });
+}
+
+export function useRemoveListMemberMutation(listId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch(
+        `/api/lists/${encodeURIComponent(listId)}/members/${encodeURIComponent(userId)}`,
+        { method: "DELETE" },
+      );
+      return readApiResponse<{ removed: boolean; userId: string }>(res);
+    },
+    onSuccess: ({ userId }) => {
+      queryClient.setQueryData<ListDetailResponse>(listQueryKeys.detail(listId), (prev) => {
+        if (!prev) return prev;
+        const nextMembers = (prev.members ?? []).filter((m) => m.userId !== userId);
+        return {
+          ...prev,
+          list: {
+            ...prev.list,
+            memberCount: nextMembers.length,
+          },
+          members: nextMembers,
+        };
+      });
+      void queryClient.invalidateQueries({
+        queryKey: listQueryKeys.all,
+        exact: true,
+        refetchType: "none",
+      });
+    },
+  });
+}
+
+export function useSaveSharedSpotMutation(listId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (sourceRestaurantId: string) => {
+      const res = await fetch(`/api/lists/${encodeURIComponent(listId)}/save-place`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceRestaurantId }),
+      });
+      return readApiResponse<{ created: boolean; restaurant: UserRestaurantItem }>(res);
+    },
+    onSuccess: ({ restaurant }, sourceRestaurantId) => {
+      queryClient.setQueryData<UserRestaurantItem[]>(restaurantQueryKeys.all, (prev) => {
+        if (!prev) return [restaurant];
+        if (prev.some((item) => item.id === restaurant.id)) return prev;
+        return [restaurant, ...prev];
+      });
+      queryClient.setQueryData<ListDetailResponse>(listQueryKeys.detail(listId), (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: prev.items.map((item) =>
+            item.id === sourceRestaurantId || item.placeId === restaurant.placeId
+              ? { ...item, viewerRestaurantId: restaurant.id }
+              : item,
           ),
         };
       });

@@ -22,5 +22,5 @@ export default async function ListDetailPage({ params }: { params: Promise<{ id:
     notFound();
   }
 
-  return <ListDetail initialDetail={detail} />;
+  return <ListDetail initialDetail={detail} currentUserId={user.id} />;
 }

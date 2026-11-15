@@ -42,6 +42,9 @@ export async function POST(request: Request, context: RouteContext) {
     if (!result) {
       return apiError(404, "NOT_FOUND", "List or restaurant not found.");
     }
+    if ("forbidden" in result) {
+      return apiError(403, "FORBIDDEN", "Only list editors or owners can modify spots.");
+    }
 
     return privateJson(result, result.added ? 201 : 200);
   } catch (error) {
@@ -81,6 +84,9 @@ export async function DELETE(request: Request, context: RouteContext) {
     const result = await removeRestaurantFromList(user.id, listId, parsed.data.userRestaurantId);
     if (!result) {
       return apiError(404, "LIST_NOT_FOUND", "List not found.");
+    }
+    if ("forbidden" in result) {
+      return apiError(403, "FORBIDDEN", "Only list editors or owners can modify spots.");
     }
 
     return privateJson(result);

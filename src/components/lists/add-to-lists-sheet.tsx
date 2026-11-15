@@ -29,6 +29,7 @@ export function AddToListsSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const { data: lists = [], isLoading } = useListsQuery(undefined, open);
+  const editableLists = lists.filter((list) => list.viewerRole !== "viewer");
   const addToListMutation = useAddToListMutation();
   const removeFromListMutation = useRemoveFromListMutation();
   const createListMutation = useCreateListMutation();
@@ -103,14 +104,16 @@ export function AddToListsSheet({
               <div className="h-14 animate-pulse rounded-xl bg-surface-elevated" />
               <div className="h-14 animate-pulse rounded-xl bg-surface-elevated" />
             </div>
-          ) : lists.length === 0 ? (
+          ) : editableLists.length === 0 ? (
             <p className="rounded-xl border border-dashed border-border bg-surface-elevated/40 px-4 py-4 text-sm text-muted">
-              You don&apos;t have any lists yet. Create your first list below.
+              You don&apos;t have any editable lists yet. Create your first list below.
             </p>
           ) : (
             <ul className="space-y-2" aria-label="Your lists">
-              {lists.map((list) => {
-                const inList = list.restaurantIds.includes(restaurant.id);
+              {editableLists.map((list) => {
+                const inList =
+                  list.restaurantIds.includes(restaurant.id) ||
+                  (list.placeIds?.includes(restaurant.placeId) ?? false);
                 return (
                   <li key={list.id}>
                     <button
@@ -157,7 +160,7 @@ export function AddToListsSheet({
             </ul>
           )}
 
-          {!showNewForm && lists.length > 0 ? (
+          {!showNewForm && editableLists.length > 0 ? (
             <Button
               type="button"
               variant="outline"

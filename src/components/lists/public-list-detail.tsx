@@ -13,6 +13,7 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -35,6 +36,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const PREFERRED_CUISINE_ORDER = ["Asian", "Indian", "Mexican", "Ramen", "Pizza"];
+
+const PublicListMap = dynamic(
+  () => import("@/components/lists/public-list-map").then((mod) => mod.PublicListMap),
+  { ssr: false },
+);
 
 function getPrimaryCuisine(cuisines: string[]): string {
   const nonMeta = cuisines.filter((c) => c.toLowerCase() !== "vegetarian-friendly");
@@ -443,7 +449,7 @@ export function PublicListDetail({
                 )}
               >
                 <MapIcon className="size-3.5" aria-hidden="true" />
-                Directions
+                Map
               </button>
             </div>
           </div>
@@ -516,6 +522,13 @@ export function PublicListDetail({
         />
       ) : viewMode === "map" ? (
         <div className="space-y-3">
+          <PublicListMap
+            items={filteredItems}
+            viewerSignedIn={viewerSignedIn}
+            savingSpotId={savingSpotId}
+            onSaveSpot={(id, name) => void handleSaveSpot(id, name)}
+          />
+
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface-elevated/55 px-4 py-3 dark:bg-[#191512]">
             <p className="text-xs text-muted">
               Open directions for any spot in Google Maps, or save the list to plot pins on your
