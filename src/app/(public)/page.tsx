@@ -14,9 +14,14 @@ export default function LandingPage() {
           </span>
           <span className="font-serif text-lg font-medium tracking-tight">Restaurant Tracker</span>
         </div>
-        <Link href="/signin" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
-          Sign in
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/explore" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
+            Explore guides
+          </Link>
+          <Link href="/signin" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
+            Sign in
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-5 py-12">
@@ -40,6 +45,9 @@ export default function LandingPage() {
           </Link>
           <Link href="/signin" className={cn(buttonVariants({ variant: "outline", size: "lg" }))}>
             Sign in
+          </Link>
+          <Link href="/explore" className={cn(buttonVariants({ variant: "ghost", size: "lg" }))}>
+            Browse city guides
           </Link>
         </div>
       </main>

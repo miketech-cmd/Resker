@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -231,13 +232,23 @@ export const lists = pgTable(
     description: text("description"),
     icon: text("icon"),
     publicSlug: text("public_slug").unique(),
+    isPublic: boolean("is_public").notNull().default(false),
+    isFeatured: boolean("is_featured").notNull().default(false),
+    city: text("city"),
+    copyCount: integer("copy_count").notNull().default(0),
+    sourceListId: uuid("source_list_id").references((): AnyPgColumn => lists.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [index("lists_owner_id_idx").on(table.ownerId)],
+  (table) => [
+    index("lists_owner_id_idx").on(table.ownerId),
+    index("lists_public_browse_idx").on(table.isPublic, table.isFeatured, table.copyCount),
+  ],
 );
 
 export const listItems = pgTable(
@@ -253,6 +264,7 @@ export const listItems = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     position: text("position").notNull(),
+    curatorNote: text("curator_note"),
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

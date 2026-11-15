@@ -20,7 +20,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
+  Check,
+  Copy,
   ExternalLink,
+  Globe,
   GripVertical,
   List as ListIcon,
   Map as MapIcon,
@@ -166,6 +169,7 @@ export function ListDetail({ initialDetail }: { initialDetail: ListDetailRespons
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [copiedShareLink, setCopiedShareLink] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -223,6 +227,19 @@ export function ListDetail({ initialDetail }: { initialDetail: ListDetailRespons
     }
   }
 
+  async function handleCopyShareLink() {
+    if (!list.publicSlug) return;
+    const shareUrl = `${window.location.origin}/s/${list.publicSlug}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedShareLink(true);
+      toast("Public share link copied");
+      window.setTimeout(() => setCopiedShareLink(false), 2000);
+    } catch {
+      toast.error(`Share link: /s/${list.publicSlug}`);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:px-6">
       <div className="flex items-center justify-between gap-2">
@@ -235,6 +252,25 @@ export function ListDetail({ initialDetail }: { initialDetail: ListDetailRespons
         </Link>
 
         <div className="flex items-center gap-2">
+          {list.isPublic && list.publicSlug ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleCopyShareLink()}
+              className="gap-1.5"
+            >
+              {copiedShareLink ? (
+                <Check
+                  className="size-3.5 text-emerald-600 dark:text-emerald-400"
+                  aria-hidden="true"
+                />
+              ) : (
+                <Copy className="size-3.5" aria-hidden="true" />
+              )}
+              {copiedShareLink ? "Copied" : "Copy share link"}
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -293,14 +329,23 @@ export function ListDetail({ initialDetail }: { initialDetail: ListDetailRespons
             <FoodIcon name={list.icon} className="size-6" />
           </span>
           <div className="min-w-0 flex-1">
-            <h1 className="font-serif text-2xl font-medium tracking-tight text-ink sm:text-3xl">
-              {list.name}
-            </h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-serif text-2xl font-medium tracking-tight text-ink sm:text-3xl">
+                {list.name}
+              </h1>
+              {list.isPublic ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                  <Globe className="size-3" aria-hidden="true" />
+                  Public
+                </span>
+              ) : null}
+            </div>
             {list.description ? (
               <p className="mt-1 text-sm text-muted">{list.description}</p>
             ) : null}
             <p className="mt-1.5 text-xs font-medium text-muted tabular-nums">
               {items.length} {items.length === 1 ? "spot" : "spots"}
+              {list.isPublic && list.city ? ` · ${list.city}` : ""}
             </p>
           </div>
         </div>

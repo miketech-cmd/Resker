@@ -45,6 +45,8 @@ export function ListFormSheet({
   const [name, setName] = useState(list?.name ?? "");
   const [description, setDescription] = useState(list?.description ?? "");
   const [icon, setIcon] = useState<FoodIconKey>(initialIcon);
+  const [isPublic, setIsPublic] = useState(Boolean(list?.isPublic));
+  const [city, setCity] = useState(list?.city ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -58,6 +60,8 @@ export function ListFormSheet({
       name,
       description: description.trim() ? description.trim() : null,
       icon,
+      isPublic,
+      city: city.trim() ? city.trim() : null,
     });
 
     if (!parsed.success) {
@@ -145,6 +149,54 @@ export function ListFormSheet({
                 );
               })}
             </div>
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-border bg-surface-elevated/60 p-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Label htmlFor="list-is-public" className="text-sm font-medium text-ink">
+                  Public list
+                </Label>
+                <p className="mt-0.5 text-xs text-muted">
+                  Shareable by link and discoverable in Browse Lists. Only list name, spots, and
+                  city are shared — your personal ratings and visit logs stay private.
+                </p>
+              </div>
+              <button
+                id="list-is-public"
+                type="button"
+                role="switch"
+                aria-checked={isPublic}
+                onClick={() => setIsPublic((v) => !v)}
+                className={cn(
+                  "relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                  isPublic
+                    ? "border-accent bg-accent"
+                    : "border-border bg-surface dark:bg-surface-elevated",
+                )}
+              >
+                <span className="sr-only">Toggle public visibility</span>
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block size-5 rounded-full bg-white shadow-xs transition-transform",
+                    isPublic ? "translate-x-6" : "translate-x-1",
+                  )}
+                />
+              </button>
+            </div>
+
+            {isPublic ? (
+              <div className="space-y-1.5 border-t border-border/70 pt-3">
+                <Label htmlFor="list-city">City (optional)</Label>
+                <Input
+                  id="list-city"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="e.g. Seattle, WA"
+                  maxLength={80}
+                />
+              </div>
+            ) : null}
           </div>
 
           {error ? (

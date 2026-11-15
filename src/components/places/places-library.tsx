@@ -341,11 +341,16 @@ export function PlacesLibrary({
       {restaurants.length === 0 ? (
         <EmptyState
           title="Nothing on the menu yet"
-          description="Paste a Google Maps link or search by name to add your first spot."
+          description="Paste a Google Maps link, search by name, or save spots from curated vegetarian city guides."
           action={
-            <Link href="/places?add=1" className={cn(buttonVariants({ variant: "primary" }))}>
-              Add first spot
-            </Link>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <Link href="/places?add=1" className={cn(buttonVariants({ variant: "primary" }))}>
+                Add first spot
+              </Link>
+              <Link href="/lists?tab=browse" className={cn(buttonVariants({ variant: "outline" }))}>
+                Browse guides
+              </Link>
+            </div>
           }
         />
       ) : (

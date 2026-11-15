@@ -2,8 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { readApiResponse } from "@/lib/queries/restaurants";
+import {
+  readApiResponse,
+  restaurantQueryKeys,
+  type UserRestaurantItem,
+} from "@/lib/queries/restaurants";
 import type {
+  ClonePublicListInput,
   CreateListInput,
   ReorderListItemInput,
   UpdateListInput,
@@ -14,10 +19,59 @@ export interface ListSummaryItem {
   name: string;
   description: string | null;
   icon: string | null;
+  publicSlug?: string | null;
+  isPublic?: boolean;
+  isFeatured?: boolean;
+  city?: string | null;
+  copyCount?: number;
+  sourceListId?: string | null;
   itemCount: number;
   restaurantIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PublicListSummaryItem {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  publicSlug: string;
+  isFeatured: boolean;
+  city: string | null;
+  copyCount: number;
+  itemCount: number;
+  curatorName: string;
+  curatorUsername: string | null;
+  cuisines: string[];
+  savedCopyListId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicListRestaurantEntry {
+  id: string;
+  placeId: string;
+  googlePlaceId: string;
+  googleMapsUri: string | null;
+  lat: number | null;
+  lng: number | null;
+  name: string;
+  address: string | null;
+  city: string | null;
+  countryCode: string | null;
+  cuisines: string[];
+  priceLevel: number | null;
+  curatorNote: string | null;
+  position: string;
+  addedAt: string;
+  savedByViewer: boolean;
+  viewerRestaurantId: string | null;
+}
+
+export interface PublicListDetailResponse {
+  list: PublicListSummaryItem;
+  items: PublicListRestaurantEntry[];
 }
 
 export interface ListRestaurantEntry {
@@ -52,7 +106,130 @@ export interface ListDetailResponse {
 export const listQueryKeys = {
   all: ["lists"] as const,
   detail: (id: string) => ["lists", "detail", id] as const,
+  publicAll: (q = "", city = "") => ["lists", "public", q, city] as const,
+  publicDetail: (slug: string) => ["lists", "public", "detail", slug] as const,
 };
+
+export async function fetchPublicLists(filters?: {
+  q?: string;
+  city?: string;
+}): Promise<PublicListSummaryItem[]> {
+  const params = new URLSearchParams();
+  if (filters?.q?.trim()) params.set("q", filters.q.trim());
+  if (filters?.city?.trim()) params.set("city", filters.city.trim());
+  const qs = params.toString();
+  const res = await fetch(qs ? `/api/lists/public?${qs}` : "/api/lists/public", {
+    cache: "no-store",
+  });
+  const data = await readApiResponse<{ lists: PublicListSummaryItem[] }>(res);
+  return data.lists;
+}
+
+export async function fetchPublicListDetail(slug: string): Promise<PublicListDetailResponse> {
+  const res = await fetch(`/api/lists/public/${encodeURIComponent(slug)}`, { cache: "no-store" });
+  return readApiResponse<PublicListDetailResponse>(res);
+}
+
+export function usePublicListsQuery(
+  filters?: { q?: string; city?: string },
+  initialData?: PublicListSummaryItem[],
+  enabled = true,
+) {
+  const q = filters?.q?.trim() ?? "";
+  const city = filters?.city?.trim() ?? "";
+  return useQuery({
+    queryKey: listQueryKeys.publicAll(q, city),
+    queryFn: () => fetchPublicLists({ q, city }),
+    initialData: !q && !city ? initialData : undefined,
+    enabled,
+  });
+}
+
+export function usePublicListDetailQuery(slug: string, initialData?: PublicListDetailResponse) {
+  return useQuery({
+    queryKey: listQueryKeys.publicDetail(slug),
+    queryFn: () => fetchPublicListDetail(slug),
+    initialData,
+  });
+}
+
+export function useSavePublicSpotMutation(slug: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (sourceRestaurantId: string) => {
+      const res = await fetch(`/api/lists/public/${encodeURIComponent(slug)}/save-place`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceRestaurantId }),
+      });
+      return readApiResponse<{ created: boolean; restaurant: UserRestaurantItem }>(res);
+    },
+    onSuccess: ({ restaurant }, sourceRestaurantId) => {
+      queryClient.setQueryData<UserRestaurantItem[]>(restaurantQueryKeys.all, (prev) => {
+        if (!prev) return [restaurant];
+        if (prev.some((item) => item.id === restaurant.id)) return prev;
+        return [restaurant, ...prev];
+      });
+      queryClient.setQueryData<PublicListDetailResponse>(
+        listQueryKeys.publicDetail(slug),
+        (prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.map((item) =>
+              item.id === sourceRestaurantId || item.placeId === restaurant.placeId
+                ? { ...item, savedByViewer: true, viewerRestaurantId: restaurant.id }
+                : item,
+            ),
+          };
+        },
+      );
+    },
+  });
+}
+
+export function useClonePublicListMutation(slug: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input?: ClonePublicListInput) => {
+      const res = await fetch(`/api/lists/public/${encodeURIComponent(slug)}/clone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input ?? {}),
+      });
+      return readApiResponse<{
+        list: ListSummaryItem;
+        addedRestaurantsCount: number;
+        totalItemsCount: number;
+      }>(res);
+    },
+    onSuccess: ({ list }) => {
+      queryClient.setQueryData<ListSummaryItem[]>(listQueryKeys.all, (prev) => {
+        if (!prev) return [list];
+        return [list, ...prev.filter((item) => item.id !== list.id)];
+      });
+      queryClient.setQueryData<PublicListDetailResponse>(
+        listQueryKeys.publicDetail(slug),
+        (prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            list: {
+              ...prev.list,
+              copyCount: prev.list.copyCount + 1,
+              savedCopyListId: list.id,
+            },
+          };
+        },
+      );
+      void queryClient.invalidateQueries({ queryKey: restaurantQueryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: listQueryKeys.publicDetail(slug) });
+      void queryClient.invalidateQueries({ queryKey: ["lists", "public"] });
+    },
+  });
+}
 
 export async function fetchUserLists(): Promise<ListSummaryItem[]> {
   const res = await fetch("/api/lists", { cache: "no-store" });

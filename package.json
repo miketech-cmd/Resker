@@ -18,6 +18,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:push": "drizzle-kit push",
+    "db:seed-guides": "tsx src/db/seed-public-lists.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
