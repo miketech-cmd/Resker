@@ -1,5 +1,6 @@
 "use client";
 
+import { QueryClientProvider } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { ThemeProvider, useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
@@ -40,7 +41,7 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   if (!persister) {
-    return content;
+    return <QueryClientProvider client={queryClient}>{content}</QueryClientProvider>;
   }
 
   return (

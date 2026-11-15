@@ -1,15 +1,19 @@
 "use client";
 
 import { Bookmark, List, MapPin, Plus, User } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 
 import { FoodIcon } from "@/components/icons/food-icons";
-import { AddSheetStub } from "@/components/shell/add-sheet-stub";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AuthenticatedUser } from "@/server/auth-guard";
+
+const AddSheet = dynamic(() => import("@/components/places/add-sheet").then((m) => m.AddSheet), {
+  ssr: false,
+});
 
 const NAV_ITEMS = [
   { href: "/places", label: "Places", Icon: Bookmark },
@@ -186,7 +190,7 @@ export function AppShell({ user, children }: { user: AuthenticatedUser; children
       </nav>
 
       <Suspense fallback={null}>
-        <AddSheetStub />
+        <AddSheet />
       </Suspense>
     </div>
   );
