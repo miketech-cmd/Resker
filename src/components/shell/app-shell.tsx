@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, List, MapPin, Plus, User } from "lucide-react";
+import { Bookmark, CalendarClock, List, MapPin, Plus, User } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -25,6 +25,14 @@ const NAV_ITEMS = [
   { href: "/places", label: "Places", Icon: Bookmark },
   { href: "/map", label: "Map", Icon: MapPin },
   { href: "/lists", label: "Lists", Icon: List },
+  { href: "/me", label: "Me", Icon: User },
+] as const;
+
+const DESKTOP_NAV_ITEMS = [
+  { href: "/places", label: "Places", Icon: Bookmark },
+  { href: "/map", label: "Map", Icon: MapPin },
+  { href: "/lists", label: "Lists", Icon: List },
+  { href: "/plans", label: "Plans", Icon: CalendarClock },
   { href: "/me", label: "Me", Icon: User },
 ] as const;
 
@@ -103,7 +111,7 @@ export function AppShell({ user, children }: { user: AuthenticatedUser; children
         </div>
 
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-1">
-          {NAV_ITEMS.map(({ href, label, Icon }) => {
+          {DESKTOP_NAV_ITEMS.map(({ href, label, Icon }) => {
             const active = isActive(href);
             return (
               <Link

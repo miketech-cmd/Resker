@@ -152,6 +152,65 @@ export async function getRestaurantVisits(
   return visitRows.map((row) => serializeVisitRow(row, dishesByVisit.get(row.id) ?? []));
 }
 
+export async function insertVisitInTx(
+  tx: PoolTxExecutor,
+  userId: string,
+  restaurantId: string,
+  input: CreateVisitInput,
+): Promise<VisitSummary | null> {
+  const [ownedRestaurant] = await tx
+    .select({
+      id: userRestaurants.id,
+      status: userRestaurants.status,
+      visitCount: userRestaurants.visitCount,
+    })
+    .from(userRestaurants)
+    .where(and(eq(userRestaurants.id, restaurantId), eq(userRestaurants.userId, userId)))
+    .limit(1);
+
+  if (!ownedRestaurant) {
+    return null;
+  }
+
+  const [insertedVisit] = await tx
+    .insert(visits)
+    .values({
+      userRestaurantId: restaurantId,
+      userId,
+      visitedOn: input.visitedOn,
+      ratingHalf: input.ratingHalf ?? null,
+      notes: input.notes?.trim() ? input.notes.trim() : null,
+    })
+    .returning();
+
+  if (!insertedVisit) {
+    throw new Error("Failed to insert visit.");
+  }
+
+  let insertedDishes: (typeof visitDishes.$inferSelect)[] = [];
+  if (input.dishes.length > 0) {
+    insertedDishes = await tx
+      .insert(visitDishes)
+      .values(
+        input.dishes.map((dish, index) => ({
+          visitId: insertedVisit.id,
+          name: dish.name.trim(),
+          note: dish.note?.trim() ? dish.note.trim() : null,
+          wouldOrderAgain: dish.wouldOrderAgain ?? null,
+          position: index,
+        })),
+      )
+      .returning();
+  }
+
+  await recomputeRestaurantVisitStatsTx(tx, userId, restaurantId, {
+    upgradeFirstVisitStatus: ownedRestaurant.status,
+    priorVisitCount: ownedRestaurant.visitCount,
+  });
+
+  return serializeVisitRow(insertedVisit, insertedDishes.map(serializeDishRow));
+}
+
 /**
  * Atomically logs a visit + ordered dishes, updates visit stats, and auto-promotes
  * first visits from `to_try` or `exploration` to `tried`.
@@ -161,59 +220,9 @@ export async function createVisit(
   restaurantId: string,
   input: CreateVisitInput,
 ): Promise<VisitWriteResult | null> {
-  const createdVisit = await dbPool.transaction(async (tx) => {
-    const [ownedRestaurant] = await tx
-      .select({
-        id: userRestaurants.id,
-        status: userRestaurants.status,
-        visitCount: userRestaurants.visitCount,
-      })
-      .from(userRestaurants)
-      .where(and(eq(userRestaurants.id, restaurantId), eq(userRestaurants.userId, userId)))
-      .limit(1);
-
-    if (!ownedRestaurant) {
-      return null;
-    }
-
-    const [insertedVisit] = await tx
-      .insert(visits)
-      .values({
-        userRestaurantId: restaurantId,
-        userId,
-        visitedOn: input.visitedOn,
-        ratingHalf: input.ratingHalf ?? null,
-        notes: input.notes?.trim() ? input.notes.trim() : null,
-      })
-      .returning();
-
-    if (!insertedVisit) {
-      throw new Error("Failed to insert visit.");
-    }
-
-    let insertedDishes: (typeof visitDishes.$inferSelect)[] = [];
-    if (input.dishes.length > 0) {
-      insertedDishes = await tx
-        .insert(visitDishes)
-        .values(
-          input.dishes.map((dish, index) => ({
-            visitId: insertedVisit.id,
-            name: dish.name.trim(),
-            note: dish.note?.trim() ? dish.note.trim() : null,
-            wouldOrderAgain: dish.wouldOrderAgain ?? null,
-            position: index,
-          })),
-        )
-        .returning();
-    }
-
-    await recomputeRestaurantVisitStatsTx(tx, userId, restaurantId, {
-      upgradeFirstVisitStatus: ownedRestaurant.status,
-      priorVisitCount: ownedRestaurant.visitCount,
-    });
-
-    return serializeVisitRow(insertedVisit, insertedDishes.map(serializeDishRow));
-  });
+  const createdVisit = await dbPool.transaction((tx) =>
+    insertVisitInTx(tx, userId, restaurantId, input),
+  );
 
   if (!createdVisit) {
     return null;

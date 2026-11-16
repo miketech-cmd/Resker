@@ -3,6 +3,7 @@
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDownWideNarrow,
+  CalendarClock,
   ChevronDown,
   ChevronUp,
   Globe2,
@@ -45,6 +46,7 @@ import {
   toggleFacetValue,
 } from "@/lib/places/filter-state";
 import { setSharedFilters } from "@/lib/places/filter-store";
+import { usePlansQuery } from "@/lib/queries/plans";
 import { useRestaurantsQuery, type UserRestaurantItem } from "@/lib/queries/restaurants";
 import { cn } from "@/lib/utils";
 import { RESTAURANT_STATUSES, STATUS_LABELS, type RestaurantStatus } from "@/lib/validation/places";
@@ -125,6 +127,11 @@ export function PlacesLibrary({
   const focusedSection = searchParams.get("section") as FacetId | null;
 
   const { data: restaurants = initialRestaurants } = useRestaurantsQuery(initialRestaurants);
+  const { data: plans = [] } = usePlansQuery();
+  const upcomingPlanCount = useMemo(
+    () => plans.filter((plan) => plan.status === "planned").length,
+    [plans],
+  );
   const filters = useMemo(() => parseFiltersFromSearchParams(searchParams), [searchParams]);
 
   // Keep instant controlled typing state synced without lagging URL updates on every keystroke.
@@ -321,21 +328,36 @@ export function PlacesLibrary({
           </p>
         </div>
 
-        <Button
-          type="button"
-          variant={activeSheetCount > 0 ? "primary" : "outline"}
-          size="sm"
-          onClick={() => openFilterSheet()}
-          className="shrink-0 gap-1.5"
-        >
-          <SlidersHorizontal className="size-4" aria-hidden="true" />
-          <span>Filters</span>
-          {activeSheetCount > 0 ? (
-            <span className="rounded-full bg-surface/20 px-1.5 text-xs font-semibold tabular-nums">
-              {activeSheetCount}
-            </span>
-          ) : null}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/plans"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+          >
+            <CalendarClock className="size-4" aria-hidden="true" />
+            <span>Plans</span>
+            {upcomingPlanCount > 0 ? (
+              <span className="rounded-full bg-accent/15 px-1.5 text-xs font-semibold text-accent tabular-nums">
+                {upcomingPlanCount}
+              </span>
+            ) : null}
+          </Link>
+
+          <Button
+            type="button"
+            variant={activeSheetCount > 0 ? "primary" : "outline"}
+            size="sm"
+            onClick={() => openFilterSheet()}
+            className="gap-1.5"
+          >
+            <SlidersHorizontal className="size-4" aria-hidden="true" />
+            <span>Filters</span>
+            {activeSheetCount > 0 ? (
+              <span className="rounded-full bg-surface/20 px-1.5 text-xs font-semibold tabular-nums">
+                {activeSheetCount}
+              </span>
+            ) : null}
+          </Button>
+        </div>
       </header>
 
       {restaurants.length === 0 ? (

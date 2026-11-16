@@ -3,6 +3,10 @@
 import {
   ArrowLeft,
   BookmarkPlus,
+  CalendarPlus,
+  Check,
+  Clock,
+  Download,
   ExternalLink,
   MapPin,
   Navigation,
@@ -26,7 +30,9 @@ import { StarRating, formatStars } from "@/components/ui/star-rating";
 import { toast } from "@/components/ui/toast";
 import { formatPriceLevel, mapCuisinesToFoodIcon } from "@/lib/places/cuisines";
 import { normalizeFacetKey } from "@/lib/places/facets";
+import { downloadPlanIcs } from "@/lib/places/ics";
 import { buildMapsDirectionsUrl, buildMapsPlaceUrl } from "@/lib/places/maps-links";
+import { useCompletePlanMutation, usePlansQuery, type PlannedVisitItem } from "@/lib/queries/plans";
 import {
   useDeleteRestaurantMutation,
   useRestaurantDetailQuery,
@@ -41,6 +47,7 @@ import {
   updateRestaurantSchema,
   type RestaurantStatus,
 } from "@/lib/validation/places";
+import { formatPlanDateLabel, formatPlanTime } from "@/lib/validation/plans";
 
 const LogVisitSheet = dynamic(
   () => import("@/components/places/log-visit-sheet").then((mod) => mod.LogVisitSheet),
@@ -49,6 +56,11 @@ const LogVisitSheet = dynamic(
 
 const AddToListsSheet = dynamic(
   () => import("@/components/lists/add-to-lists-sheet").then((mod) => mod.AddToListsSheet),
+  { ssr: false },
+);
+
+const PlanVisitSheet = dynamic(
+  () => import("@/components/places/plan-visit-sheet").then((mod) => mod.PlanVisitSheet),
   { ssr: false },
 );
 
@@ -216,15 +228,23 @@ export function RestaurantDetail({
     initialRestaurant,
   );
   const { data: visits = initialVisits } = useRestaurantVisitsQuery(restaurant.id, initialVisits);
+  const { data: allPlans = [] } = usePlansQuery();
   const updateMutation = useUpdateRestaurantMutation();
   const deleteMutation = useDeleteRestaurantMutation();
+  const completePlanMutation = useCompletePlanMutation();
 
   const [editOpen, setEditOpen] = useState(false);
   const [listsOpen, setListsOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<PlannedVisitItem | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [editingVisit, setEditingVisit] = useState<VisitItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
+
+  const upcomingPlans = allPlans.filter(
+    (plan) => plan.userRestaurantId === restaurant.id && plan.status === "planned",
+  );
 
   const isUrlLogOpen = searchParams.get("log") === "1";
   const effectiveLogOpen = logOpen || isUrlLogOpen;
@@ -289,6 +309,22 @@ export function RestaurantDetail({
     }
   }
 
+  async function handleCompletePlan(plan: PlannedVisitItem) {
+    try {
+      const wasUntried = restaurant.status !== "tried";
+      const result = await completePlanMutation.mutateAsync({ id: plan.id });
+      if (result.alreadyCompleted) {
+        toast("Already logged to visits");
+      } else if (wasUntried && result.restaurant.status === "tried") {
+        toast("Visit logged · Moved to Tried");
+      } else {
+        toast("Visit logged");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not log planned visit.");
+    }
+  }
+
   async function handleDeleteSpot() {
     try {
       await deleteMutation.mutateAsync(restaurant.id);
@@ -311,6 +347,19 @@ export function RestaurantDetail({
         </Link>
 
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEditingPlan(null);
+              setPlanOpen(true);
+            }}
+            className="gap-1.5"
+          >
+            <CalendarPlus className="size-3.5" aria-hidden="true" />
+            Plan
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -499,6 +548,86 @@ export function RestaurantDetail({
         </form>
       </Card>
 
+      {/* Upcoming Planned Visits */}
+      {upcomingPlans.length > 0 ? (
+        <Card className="space-y-3" aria-label="Upcoming visits">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-serif text-lg font-medium text-ink">
+              Upcoming {upcomingPlans.length === 1 ? "visit" : "visits"}
+            </h2>
+            <Link href="/plans" className="text-xs font-medium text-accent hover:underline">
+              All plans
+            </Link>
+          </div>
+
+          <ul className="space-y-2.5">
+            {upcomingPlans.map((plan) => {
+              const dateLabel = formatPlanDateLabel(plan.plannedFor);
+              const timeLabel = formatPlanTime(plan.plannedTime);
+              return (
+                <li
+                  key={plan.id}
+                  className="space-y-2.5 rounded-xl border border-border bg-surface-elevated/60 p-3 dark:bg-[#191512]"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-ink">{dateLabel}</span>
+                      {timeLabel ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted tabular-nums">
+                          <Clock className="size-3" aria-hidden="true" />
+                          {timeLabel}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted">{plan.plannedFor}</span>
+                      )}
+                    </div>
+                  </div>
+                  {plan.note ? <p className="text-xs text-muted">{plan.note}</p> : null}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void handleCompletePlan(plan)}
+                      disabled={completePlanMutation.isPending}
+                      className="gap-1.5"
+                    >
+                      <Check className="size-3.5" aria-hidden="true" />
+                      Log it
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        downloadPlanIcs(plan);
+                        toast("Calendar event (.ics) downloaded");
+                      }}
+                      className="gap-1.5"
+                    >
+                      <Download className="size-3.5" aria-hidden="true" />
+                      .ics
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingPlan(plan);
+                        setPlanOpen(true);
+                      }}
+                      className="gap-1.5"
+                    >
+                      <Pencil className="size-3.5" aria-hidden="true" />
+                      Edit
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      ) : null}
+
       {/* Visits & Ordered Dishes */}
       <VisitTimeline
         restaurant={restaurant}
@@ -579,6 +708,19 @@ export function RestaurantDetail({
 
       {listsOpen ? (
         <AddToListsSheet restaurant={restaurant} open={listsOpen} onOpenChange={setListsOpen} />
+      ) : null}
+
+      {planOpen ? (
+        <PlanVisitSheet
+          key={editingPlan ? `plan-${editingPlan.id}` : `new-plan-${restaurant.id}`}
+          restaurant={restaurant}
+          plan={editingPlan}
+          open={planOpen}
+          onOpenChange={(nextOpen) => {
+            setPlanOpen(nextOpen);
+            if (!nextOpen) setEditingPlan(null);
+          }}
+        />
       ) : null}
     </div>
   );

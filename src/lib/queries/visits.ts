@@ -45,7 +45,7 @@ export const visitQueryKeys = {
     ["restaurants", "detail", restaurantId, "visits"] as const,
 };
 
-function sortVisitsNewestFirst(list: VisitItem[]): VisitItem[] {
+export function sortVisitsNewestFirst(list: VisitItem[]): VisitItem[] {
   return [...list].sort((a, b) => {
     const dateDiff = b.visitedOn.localeCompare(a.visitedOn);
     if (dateDiff !== 0) return dateDiff;
@@ -53,7 +53,10 @@ function sortVisitsNewestFirst(list: VisitItem[]): VisitItem[] {
   });
 }
 
-function syncRestaurantSummaryCache(queryClient: QueryClient, restaurant: UserRestaurantItem) {
+export function syncRestaurantSummaryCache(
+  queryClient: QueryClient,
+  restaurant: UserRestaurantItem,
+) {
   queryClient.setQueryData<UserRestaurantItem>(
     restaurantQueryKeys.detail(restaurant.id),
     restaurant,

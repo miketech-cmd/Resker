@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-function isValidIsoCalendarDate(value: string): boolean {
+export function isValidIsoCalendarDate(value: string): boolean {
   if (!ISO_DATE_RE.test(value)) return false;
   const [yearStr, monthStr, dayStr] = value.split("-");
   const year = Number(yearStr);

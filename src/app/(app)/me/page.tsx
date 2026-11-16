@@ -1,12 +1,15 @@
+import { CalendarClock, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { ThemeSwitch } from "@/components/shell/theme-switch";
 import { Card } from "@/components/ui/card";
 import { requireUser } from "@/server/auth-guard";
+import { getUserProfileStats } from "@/server/plans";
 
 export default async function MePage() {
   const user = await requireUser();
+  const stats = await getUserProfileStats(user.id);
 
   return (
     <div className="mx-auto max-w-xl px-4 py-6 sm:px-6">
@@ -28,15 +31,46 @@ export default async function MePage() {
         <div className="grid grid-cols-2 gap-3">
           <Card className="p-4">
             <p className="text-xs font-medium tracking-wide text-muted uppercase">Places tried</p>
-            <p className="mt-1 font-serif text-2xl font-medium text-ink">0</p>
+            <p className="mt-1 font-serif text-2xl font-medium text-ink tabular-nums">
+              {stats.placesTried}
+            </p>
           </Card>
           <Card className="p-4">
             <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Visits this year
             </p>
-            <p className="mt-1 font-serif text-2xl font-medium text-ink">0</p>
+            <p className="mt-1 font-serif text-2xl font-medium text-ink tabular-nums">
+              {stats.visitsThisYear}
+            </p>
           </Card>
         </div>
+
+        <Link
+          href="/plans"
+          className="block rounded-2xl focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <Card className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-surface-elevated/80">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+                <CalendarClock className="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="font-serif text-base font-medium text-ink">Upcoming plans</p>
+                <p className="text-xs text-muted">
+                  {stats.upcomingPlans === 0
+                    ? "No reservations scheduled yet"
+                    : `${stats.upcomingPlans} upcoming ${stats.upcomingPlans === 1 ? "visit" : "visits"}`}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-serif text-xl font-medium text-ink tabular-nums">
+                {stats.upcomingPlans}
+              </span>
+              <ChevronRight className="size-4 text-muted" aria-hidden="true" />
+            </div>
+          </Card>
+        </Link>
 
         <Card className="space-y-3">
           <div>
