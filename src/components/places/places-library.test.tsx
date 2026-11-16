@@ -145,14 +145,40 @@ describe("PlacesLibrary", () => {
     vi.useRealTimers();
   });
 
-  it("filters accurately via FilterSheet city selection and preserves applied filters on close", async () => {
+  it("defaults to By City collapsed, expands all/individual groups, and auto-expands highlighted spot", () => {
     renderLibrary();
+
+    // Defaults: By City selected, groups collapsed by default, Expand all shown
+    expect(screen.getByRole("button", { name: "By City" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("heading", { name: "New York" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Bellevue" })).toBeInTheDocument();
+    expect(screen.queryByText("Hangawi")).not.toBeInTheDocument();
+    expect(screen.queryByText("Honest Restaurant")).not.toBeInTheDocument();
+
+    // Expand all reveals spots in default Compact view
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(screen.getByText("Hangawi")).toBeInTheDocument();
+    expect(screen.getByText("Honest Restaurant")).toBeInTheDocument();
+
+    // Collapse all collapses back
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(screen.queryByText("Hangawi")).not.toBeInTheDocument();
+  });
+
+  it("auto-expands the group containing ?highlight=id while keeping other groups collapsed", () => {
+    renderLibrary("highlight=r1");
+    expect(screen.getByText("Hangawi")).toBeInTheDocument();
+    expect(screen.queryByText("Honest Restaurant")).not.toBeInTheDocument();
+  });
+
+  it("filters accurately via FilterSheet city selection and sticky Open filters trigger", async () => {
+    renderLibrary("group=none");
 
     expect(screen.getByText("Hangawi")).toBeInTheDocument();
     expect(screen.getByText("Rubirosa")).toBeInTheDocument();
     expect(screen.getByText("Honest Restaurant")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toBeInTheDocument();
@@ -188,12 +214,16 @@ describe("PlacesLibrary", () => {
     expect(screen.getByRole("heading", { name: "New York" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Bellevue" })).toBeInTheDocument();
 
-    // Collapsing New York hides New York cards cleanly
+    // Expanding New York reveals New York cards cleanly while Bellevue stays collapsed
+    fireEvent.click(screen.getByRole("button", { name: /New York/, expanded: false }));
+    expect(screen.getByText("Hangawi")).toBeInTheDocument();
+    expect(screen.queryByText("Honest Restaurant")).not.toBeInTheDocument();
+
+    // Collapsing New York hides New York cards again
     fireEvent.click(screen.getByRole("button", { name: /New York/, expanded: true }));
     expect(screen.queryByText("Hangawi")).not.toBeInTheDocument();
-    expect(screen.getByText("Honest Restaurant")).toBeInTheDocument();
 
-    // Switching to By Cuisine shows all matching cuisines
+    // Switching to By Cuisine shows all matching cuisines (collapsed by default)
     fireEvent.click(screen.getByRole("button", { name: "By Cuisine" }));
     expect(screen.getByRole("heading", { name: "Korean" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Vegetarian" })).toBeInTheDocument();
@@ -280,21 +310,21 @@ describe("PlacesLibrary", () => {
     );
   });
 
-  it("toggles between Default and Compact density and persists in localStorage", () => {
+  it("defaults to Compact density and toggles to Comfort density with localStorage persistence", () => {
     window.localStorage.removeItem("resker:places-density");
-    renderLibrary();
+    renderLibrary("group=none");
 
     const firstCard = screen.getByText("Hangawi").closest("[data-density]");
-    expect(firstCard).toHaveAttribute("data-density", "comfortable");
+    expect(firstCard).toHaveAttribute("data-density", "compact");
+
+    fireEvent.click(screen.getByRole("button", { name: "Comfort" }));
+    expect(window.localStorage.getItem("resker:places-density")).toBe("comfortable");
+
+    const updatedCard = screen.getByText("Hangawi").closest("[data-density]");
+    expect(updatedCard).toHaveAttribute("data-density", "comfortable");
 
     fireEvent.click(screen.getByRole("button", { name: "Compact" }));
     expect(window.localStorage.getItem("resker:places-density")).toBe("compact");
-
-    const updatedCard = screen.getByText("Hangawi").closest("[data-density]");
-    expect(updatedCard).toHaveAttribute("data-density", "compact");
-
-    fireEvent.click(screen.getByRole("button", { name: "Default" }));
-    expect(window.localStorage.getItem("resker:places-density")).toBe("comfortable");
   });
 
   it("filters spots by List membership inside FilterSheet and removes active List chip", async () => {
@@ -326,19 +356,13 @@ describe("PlacesLibrary", () => {
           headers: { "Content-Type": "application/json" },
         });
       }
-      if (url === "/api/lists") {
-        return new Response(JSON.stringify({ lists: [] }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
       return new Response(JSON.stringify({ restaurants: SAMPLE_RESTAURANTS }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     });
 
-    renderLibrary();
+    renderLibrary("group=none");
 
     fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     const dialog = await screen.findByRole("dialog");

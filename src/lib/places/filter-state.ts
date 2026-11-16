@@ -60,7 +60,7 @@ export function parseFiltersFromSearchParams(params: URLSearchParams): LibraryFi
     Number.isInteger(parsedRating) && parsedRating >= 1 && parsedRating <= 10 ? parsedRating : null;
 
   const rawGroup = params.get("group") as GroupByOption | null;
-  const groupBy: GroupByOption = rawGroup && VALID_GROUP_BY.has(rawGroup) ? rawGroup : "none";
+  const groupBy: GroupByOption = rawGroup && VALID_GROUP_BY.has(rawGroup) ? rawGroup : "city";
 
   const rawGroupSort = params.get("groupSort") as GroupSortOption | null;
   const groupSort: GroupSortOption =
@@ -119,7 +119,7 @@ export function serializeFiltersToSearchParams(
     next.delete("minRating");
   }
 
-  if (filters.groupBy !== "none") {
+  if (filters.groupBy !== "city") {
     next.set("group", filters.groupBy);
   } else {
     next.delete("group");
@@ -200,7 +200,7 @@ export function clearAllLibraryFilters(current?: LibraryFilters): LibraryFilters
     ...DEFAULT_LIBRARY_FILTERS,
     facets: {},
     listIds: [],
-    groupBy: current?.groupBy ?? "none",
+    groupBy: current?.groupBy ?? DEFAULT_LIBRARY_FILTERS.groupBy,
     groupSort: current?.groupSort ?? "count_desc",
   };
 }

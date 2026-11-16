@@ -81,7 +81,7 @@ export const DEFAULT_LIBRARY_FILTERS: LibraryFilters = {
   facets: {},
   listIds: [],
   minRatingHalf: null,
-  groupBy: "none",
+  groupBy: "city",
   groupSort: "count_desc",
   sort: "updated_desc",
 };

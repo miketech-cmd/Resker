@@ -24,7 +24,7 @@ describe("filter-state", () => {
       },
       listIds: ["list-1", "list-2"],
       minRatingHalf: 8,
-      groupBy: "city" as const,
+      groupBy: "cuisine" as const,
       groupSort: "alpha_asc" as const,
       sort: "rating_desc" as const,
     };
@@ -33,10 +33,19 @@ describe("filter-state", () => {
     expect(params.get("highlight")).toBe("abc-123");
     expect(params.get("city")).toBe("tokyo,san francisco");
     expect(params.get("list")).toBe("list-1,list-2");
-    expect(params.get("group")).toBe("city");
+    expect(params.get("group")).toBe("cuisine");
 
     const parsed = parseFiltersFromSearchParams(params);
     expect(parsed).toEqual(state);
+
+    // Explicit "none" (All spots) round-trips while default "city" omits ?group=
+    const noneParams = serializeFiltersToSearchParams({ ...state, groupBy: "none" }, existing);
+    expect(noneParams.get("group")).toBe("none");
+    expect(parseFiltersFromSearchParams(noneParams).groupBy).toBe("none");
+
+    const defaultParams = serializeFiltersToSearchParams(DEFAULT_LIBRARY_FILTERS);
+    expect(defaultParams.get("group")).toBeNull();
+    expect(parseFiltersFromSearchParams(defaultParams).groupBy).toBe("city");
   });
 
   it("ignores invalid sort/group values cleanly", () => {

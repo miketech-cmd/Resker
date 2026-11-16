@@ -9,12 +9,12 @@ export const PLACES_DENSITY_STORAGE_KEY = "resker:places-density";
 const listeners = new Set<() => void>();
 
 function readStoredDensity(): PlacesDensity {
-  if (typeof window === "undefined") return "comfortable";
+  if (typeof window === "undefined") return "compact";
   try {
     const raw = window.localStorage.getItem(PLACES_DENSITY_STORAGE_KEY);
-    return raw === "compact" ? "compact" : "comfortable";
+    return raw === "comfortable" ? "comfortable" : "compact";
   } catch {
-    return "comfortable";
+    return "compact";
   }
 }
 
@@ -56,7 +56,7 @@ export function usePlacesDensity(): [PlacesDensity, (next: PlacesDensity) => voi
   const density = useSyncExternalStore(
     subscribeDensity,
     readStoredDensity,
-    () => "comfortable" as PlacesDensity,
+    () => "compact" as PlacesDensity,
   );
   const update = useCallback((next: PlacesDensity) => {
     setPlacesDensity(next);
