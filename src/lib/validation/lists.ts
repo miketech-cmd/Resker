@@ -49,16 +49,27 @@ export const updateListSchema = z
     message: "Provide at least one list field to update.",
   });
 
+export const usernameIdentifierSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/^@+/, "").toLowerCase())
+  .refine((v) => v.length >= 3 && v.length <= 20 && USERNAME_REGEX.test(v), {
+    message: "Enter a valid username (3–20 lowercase letters, numbers, or _).",
+  });
+
 export const inviteListMemberSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .transform((v) => v.replace(/^@+/, "").toLowerCase())
-    .refine((v) => v.length >= 3 && v.length <= 20 && USERNAME_REGEX.test(v), {
-      message: "Enter a valid username (3–20 lowercase letters, numbers, or _).",
-    }),
+  username: usernameIdentifierSchema,
   role: z.enum(LIST_MEMBER_ROLES).default("editor"),
 });
+
+export const inviteLibraryViewerSchema = z.object({
+  username: usernameIdentifierSchema,
+});
+
+export const libraryShareTokenParamSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9_-]{12,32}$/, "Invalid invite token.");
 
 export const updateListMemberRoleSchema = z.object({
   role: z.enum(LIST_MEMBER_ROLES),
@@ -98,4 +109,5 @@ export type ReorderListItemInput = z.infer<typeof reorderListItemSchema>;
 export type SavePublicSpotInput = z.infer<typeof savePublicSpotSchema>;
 export type ClonePublicListInput = z.infer<typeof clonePublicListSchema>;
 export type InviteListMemberInput = z.infer<typeof inviteListMemberSchema>;
+export type InviteLibraryViewerInput = z.infer<typeof inviteLibraryViewerSchema>;
 export type UpdateListMemberRoleInput = z.infer<typeof updateListMemberRoleSchema>;

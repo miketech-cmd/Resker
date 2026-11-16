@@ -240,6 +240,59 @@ export async function createUserRestaurant(
   };
 }
 
+export interface CopiedRestaurantSource {
+  placeId: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  countryCode: string | null;
+  cuisines: string[];
+  priceLevel: number | null;
+}
+
+/**
+ * Copies a spot's public place metadata into `viewerUserId`'s saved Places library
+ * (`status: "to_try"`, idempotent on `(userId, placeId)` with zero Google API calls).
+ */
+export async function saveCopiedRestaurantSpot(
+  viewerUserId: string,
+  source: CopiedRestaurantSource,
+): Promise<{ created: boolean; restaurant: UserRestaurantSummary } | null> {
+  const inserted = await db
+    .insert(userRestaurants)
+    .values({
+      userId: viewerUserId,
+      placeId: source.placeId,
+      name: source.name,
+      address: source.address,
+      city: source.city,
+      countryCode: source.countryCode,
+      cuisines: source.cuisines,
+      priceLevel: source.priceLevel,
+      status: "to_try",
+    })
+    .onConflictDoNothing({
+      target: [userRestaurants.userId, userRestaurants.placeId],
+    })
+    .returning({ id: userRestaurants.id });
+
+  const [savedRow] = await db
+    .select(RESTAURANT_SELECT_COLUMNS)
+    .from(userRestaurants)
+    .innerJoin(places, eq(userRestaurants.placeId, places.id))
+    .where(
+      and(eq(userRestaurants.userId, viewerUserId), eq(userRestaurants.placeId, source.placeId)),
+    )
+    .limit(1);
+
+  if (!savedRow) return null;
+
+  return {
+    created: inserted.length > 0,
+    restaurant: serializeRestaurantRow(savedRow),
+  };
+}
+
 export type ResolvePrefillResponse =
   | {
       alreadySaved: true;

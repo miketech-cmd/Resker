@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronRight } from "lucide-react";
+import { CalendarClock, ChevronRight, Users } from "lucide-react";
 import Link from "next/link";
 
 import { SignOutButton } from "@/components/shell/sign-out-button";
@@ -69,6 +69,26 @@ export default async function MePage() {
               </span>
               <ChevronRight className="size-4 text-muted" aria-hidden="true" />
             </div>
+          </Card>
+        </Link>
+
+        <Link
+          href="/lists?tab=shared"
+          className="block rounded-2xl focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <Card className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-surface-elevated/80">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+                <Users className="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="font-serif text-base font-medium text-ink">Shared Guides</p>
+                <p className="text-xs text-muted">
+                  Share your live Saved Places with a partner or browse shared libraries
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden="true" />
           </Card>
         </Link>
 

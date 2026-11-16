@@ -20,6 +20,7 @@ import type {
 } from "@/lib/validation/lists";
 import {
   RESTAURANT_SELECT_COLUMNS,
+  saveCopiedRestaurantSpot,
   serializeRestaurantRow,
   type UserRestaurantSummary,
 } from "@/server/places";
@@ -832,42 +833,10 @@ export async function saveSpotFromSharedList(
 
   if (!source) return null;
 
-  const inserted = await db
-    .insert(userRestaurants)
-    .values({
-      userId: viewerUserId,
-      placeId: source.placeId,
-      name: source.name,
-      address: source.address,
-      city: source.city,
-      countryCode: source.countryCode,
-      cuisines: source.cuisines,
-      priceLevel: source.priceLevel,
-      status: "to_try",
-    })
-    .onConflictDoNothing({
-      target: [userRestaurants.userId, userRestaurants.placeId],
-    })
-    .returning({ id: userRestaurants.id });
-
-  const [savedRow] = await db
-    .select(RESTAURANT_SELECT_COLUMNS)
-    .from(userRestaurants)
-    .innerJoin(places, eq(userRestaurants.placeId, places.id))
-    .where(
-      and(eq(userRestaurants.userId, viewerUserId), eq(userRestaurants.placeId, source.placeId)),
-    )
-    .limit(1);
-
-  if (!savedRow) return null;
-
-  return {
-    created: inserted.length > 0,
-    restaurant: serializeRestaurantRow(savedRow),
-  };
+  return saveCopiedRestaurantSpot(viewerUserId, source);
 }
 
-function collectTopCuisines(cuisinesLists: string[][]): string[] {
+export function collectTopCuisines(cuisinesLists: string[][]): string[] {
   const counts = new Map<string, number>();
   for (const rowCuisines of cuisinesLists) {
     for (const tag of rowCuisines) {

@@ -333,6 +333,34 @@ export const visitPhotos = pgTable("visit_photos", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Private live-library sharing ("Shared Guides" — strictly authenticated viewer-only)
+export const libraryShares = pgTable(
+  "library_shares",
+  {
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    viewerId: text("viewer_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.viewerId] }),
+    index("library_shares_viewer_id_idx").on(table.viewerId),
+    check("library_shares_no_self_share", sql`${table.ownerId} <> ${table.viewerId}`),
+  ],
+);
+
+// Private invite tokens for accepting a live-library share (requires signed-in user)
+export const libraryShareLinks = pgTable("library_share_links", {
+  ownerId: text("owner_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Guard rail on metered Google calls (per-user & global daily circuit breaker)
 export const apiUsage = pgTable(
   "api_usage",

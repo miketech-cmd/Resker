@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronRight, Compass, Globe, Plus } from "lucide-react";
+import { ChevronRight, Compass, Globe, Plus, Users } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { FoodIcon } from "@/components/icons/food-icons";
 import { PublicListBrowse } from "@/components/lists/public-list-browse";
+import { SharedGuidesTab } from "@/components/lists/shared-guides-tab";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -15,7 +16,18 @@ import {
   type ListSummaryItem,
   type PublicListSummaryItem,
 } from "@/lib/queries/lists";
+import {
+  useSharedGuidesOverviewQuery,
+  type SharedGuidesOverviewResponse,
+} from "@/lib/queries/shared-guides";
 import { cn } from "@/lib/utils";
+
+const EMPTY_SHARED_OVERVIEW: SharedGuidesOverviewResponse = {
+  sharedWithMe: [],
+  sharingWith: [],
+  inviteToken: null,
+  myLibraryCount: 0,
+};
 
 const ListFormSheet = dynamic(
   () => import("@/components/lists/list-form-sheet").then((mod) => mod.ListFormSheet),
@@ -25,20 +37,44 @@ const ListFormSheet = dynamic(
 export function ListsOverview({
   initialLists,
   initialPublicLists = [],
+  initialSharedOverview = EMPTY_SHARED_OVERVIEW,
   initialTab = "mine",
 }: {
   initialLists: ListSummaryItem[];
   initialPublicLists?: PublicListSummaryItem[];
-  initialTab?: "mine" | "browse";
+  initialSharedOverview?: SharedGuidesOverviewResponse;
+  initialTab?: "mine" | "shared" | "browse";
 }) {
   const { data: lists = initialLists } = useListsQuery(initialLists);
-  const [activeTab, setActiveTab] = useState<"mine" | "browse">(initialTab);
+  const { data: sharedOverview = initialSharedOverview } =
+    useSharedGuidesOverviewQuery(initialSharedOverview);
+  const [activeTab, setActiveTab] = useState<"mine" | "shared" | "browse">(initialTab);
   const [createOpen, setCreateOpen] = useState(false);
 
-  function switchTab(nextTab: "mine" | "browse") {
+  const { myLists, viewerOnlyLists } = useMemo(() => {
+    const mine: ListSummaryItem[] = [];
+    const viewer: ListSummaryItem[] = [];
+    for (const list of lists) {
+      if (list.viewerRole === "viewer") {
+        viewer.push(list);
+      } else {
+        mine.push(list);
+      }
+    }
+    return { myLists: mine, viewerOnlyLists: viewer };
+  }, [lists]);
+
+  const sharedIncomingCount = sharedOverview.sharedWithMe.length + viewerOnlyLists.length;
+
+  function switchTab(nextTab: "mine" | "shared" | "browse") {
     setActiveTab(nextTab);
     if (typeof window !== "undefined") {
-      const nextUrl = nextTab === "browse" ? "/lists?tab=browse" : "/lists";
+      const nextUrl =
+        nextTab === "browse"
+          ? "/lists?tab=browse"
+          : nextTab === "shared"
+            ? "/lists?tab=shared"
+            : "/lists";
       window.history.replaceState(null, "", nextUrl);
     }
   }
@@ -51,7 +87,9 @@ export function ListsOverview({
           <p className="mt-1 text-sm text-muted">
             {activeTab === "browse"
               ? "Browse curated vegetarian city guides and community public lists."
-              : "Group spots into collections like \u201cNY 2026 Travel\u201d or \u201cDate Night\u201d."}
+              : activeTab === "shared"
+                ? "Live saved-places libraries and read-only lists shared with you."
+                : "Group spots into collections like \u201cNY 2026 Travel\u201d or \u201cDate Night\u201d."}
           </p>
         </div>
 
@@ -67,7 +105,7 @@ export function ListsOverview({
       </header>
 
       <div
-        className="inline-flex rounded-full border border-border bg-surface-elevated p-0.5"
+        className="no-scrollbar inline-flex max-w-full items-center overflow-x-auto rounded-full border border-border bg-surface-elevated p-0.5"
         role="tablist"
         aria-label="Lists sections"
       >
@@ -77,12 +115,28 @@ export function ListsOverview({
           aria-selected={activeTab === "mine"}
           onClick={() => switchTab("mine")}
           className={cn(
-            "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-4 text-xs font-medium transition-colors",
+            "inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-xs font-medium whitespace-nowrap transition-colors sm:px-4",
             activeTab === "mine" ? "bg-ink text-bg shadow-2xs" : "text-muted hover:text-ink",
           )}
         >
           My Lists
-          <span className="tabular-nums opacity-75">{lists.length}</span>
+          <span className="tabular-nums opacity-75">{myLists.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "shared"}
+          onClick={() => switchTab("shared")}
+          className={cn(
+            "inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-xs font-medium whitespace-nowrap transition-colors sm:px-4",
+            activeTab === "shared" ? "bg-ink text-bg shadow-2xs" : "text-muted hover:text-ink",
+          )}
+        >
+          <Users className="size-3.5" aria-hidden="true" />
+          Shared Guides
+          {sharedIncomingCount > 0 ? (
+            <span className="tabular-nums opacity-75">{sharedIncomingCount}</span>
+          ) : null}
         </button>
         <button
           type="button"
@@ -90,7 +144,7 @@ export function ListsOverview({
           aria-selected={activeTab === "browse"}
           onClick={() => switchTab("browse")}
           className={cn(
-            "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-4 text-xs font-medium transition-colors",
+            "inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-xs font-medium whitespace-nowrap transition-colors sm:px-4",
             activeTab === "browse" ? "bg-ink text-bg shadow-2xs" : "text-muted hover:text-ink",
           )}
         >
@@ -105,7 +159,9 @@ export function ListsOverview({
           detailBasePath="/lists/public"
           viewerSignedIn
         />
-      ) : lists.length === 0 ? (
+      ) : activeTab === "shared" ? (
+        <SharedGuidesTab initialOverview={sharedOverview} viewerLists={viewerOnlyLists} />
+      ) : myLists.length === 0 ? (
         <EmptyState
           title="No lists yet"
           description="Create custom collections to organize spots for trips, neighborhoods, or browse curated city guides."
@@ -129,7 +185,7 @@ export function ListsOverview({
         />
       ) : (
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-          {lists.map((list) => (
+          {myLists.map((list) => (
             <Link
               key={list.id}
               href={`/lists/${list.id}`}
