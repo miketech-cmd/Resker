@@ -24,6 +24,7 @@ import { mapCuisinesToFoodIcon } from "@/lib/places/cuisines";
 import { parseGoogleMapsUrlMetadata, validateGoogleMapsUrl } from "@/lib/places/url-parser";
 import {
   readApiResponse,
+  usePlacesAutocompleteQuery,
   type AutocompleteSuggestionItem,
   type PlacePrefillData,
   type ResolvePlaceResponse,
@@ -73,18 +74,18 @@ export function AddSheet() {
   const extractedShareUrl =
     rawShareUrl.trim() || rawShareText.match(/https?:\/\/[^\s<>()]+/i)?.[0]?.trim() || "";
   const shareSearchFallback = !extractedShareUrl ? rawShareTitle.trim() || rawShareText.trim() : "";
+  const quickAddPlaceId = searchParams.get("placeId")?.trim() ?? "";
+  const quickAddSession = searchParams.get("session")?.trim() ?? "";
   const hasSharePayload = Boolean(extractedShareUrl || shareSearchFallback);
-  const isOpen = searchParams.get("add") === "1" || hasSharePayload;
+  const isOpen = searchParams.get("add") === "1" || hasSharePayload || Boolean(quickAddPlaceId);
 
-  const [tab, setTab] = useState<"link" | "search">("link");
+  const [tab, setTab] = useState<"link" | "search">("search");
   const [linkInput, setLinkInput] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const [isResolving, setIsResolving] = useState(false);
 
   const [searchInput, setSearchInput] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [suggestions, setSuggestions] = useState<AutocompleteSuggestionItem[]>([]);
   const [sessionToken, setSessionToken] = useState<string>(() => crypto.randomUUID());
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -92,6 +93,7 @@ export function AddSheet() {
   const [alreadySaved, setAlreadySaved] = useState<UserRestaurantItem | null>(null);
   const [prefill, setPrefill] = useState<PlacePrefillData | null>(null);
   const handledShareRef = useRef<string | null>(null);
+  const handledQuickAddRef = useRef<string | null>(null);
 
   const resetSheetState = useCallback(() => {
     setLinkError(null);
@@ -99,8 +101,8 @@ export function AddSheet() {
     setAlreadySaved(null);
     setPrefill(null);
     setIsResolving(false);
-    setSuggestions([]);
     setSessionToken(crypto.randomUUID());
+    handledQuickAddRef.current = null;
   }, []);
 
   const closeSheet = useCallback(
@@ -110,6 +112,8 @@ export function AddSheet() {
       next.delete("url");
       next.delete("text");
       next.delete("title");
+      next.delete("placeId");
+      next.delete("session");
       if (highlightId) {
         next.set("highlight", highlightId);
       }
@@ -119,6 +123,7 @@ export function AddSheet() {
       resetSheetState();
       setLinkInput("");
       setSearchInput("");
+      setTab("search");
     },
     [pathname, resetSheetState, router, searchParams],
   );
@@ -190,49 +195,71 @@ export function AddSheet() {
     };
   }, [extractedShareUrl, hasSharePayload, isOpen, resolveLink, shareSearchFallback]);
 
-  // 250ms debounced Autocomplete proxy in Search tab
-  useEffect(() => {
-    if (!isOpen || tab !== "search" || prefill || alreadySaved) return;
-    const trimmed = searchInput.trim();
-    if (trimmed.length < 3) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setIsSearching(true);
+  const fetchPlaceDetails = useCallback(
+    async (googlePlaceId: string, overrideSession?: string) => {
       setSearchError(null);
-      try {
-        const params = new URLSearchParams({
-          q: trimmed,
-          session: sessionToken,
-        });
-        if (userCoords) {
-          params.set("lat", String(userCoords.lat));
-          params.set("lng", String(userCoords.lng));
-        }
+      setAlreadySaved(null);
+      setPrefill(null);
+      setIsResolving(true);
 
-        const res = await fetch(`/api/places/autocomplete?${params.toString()}`, {
-          signal: controller.signal,
-          cache: "no-store",
+      try {
+        const res = await fetch("/api/places/details", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            googlePlaceId,
+            sessionToken: overrideSession || sessionToken,
+          }),
         });
-        const data = await readApiResponse<{ suggestions: AutocompleteSuggestionItem[] }>(res);
-        setSuggestions(data.suggestions);
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setSearchError(error instanceof Error ? error.message : "Search failed.");
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsSearching(false);
+        const data = await readApiResponse<ResolvePlaceResponse>(res);
+        setSessionToken(crypto.randomUUID());
+
+        if (data.alreadySaved) {
+          setAlreadySaved(data.existingRestaurant);
+        } else {
+          setPrefill(data.prefill);
         }
+      } catch (error) {
+        setSearchError(
+          error instanceof Error ? error.message : "Couldn't load details for that restaurant.",
+        );
+      } finally {
+        setIsResolving(false);
       }
-    }, 250);
+    },
+    [sessionToken],
+  );
+
+  // Support quick-add handoff from home unified search (?add=1&placeId=...&session=...)
+  useEffect(() => {
+    if (!isOpen || !quickAddPlaceId) return;
+    if (handledQuickAddRef.current === quickAddPlaceId) return;
+    handledQuickAddRef.current = quickAddPlaceId;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      setTab("search");
+      void fetchPlaceDetails(quickAddPlaceId, quickAddSession);
+    }, 0);
 
     return () => {
+      cancelled = true;
       window.clearTimeout(timer);
-      controller.abort();
     };
-  }, [alreadySaved, isOpen, prefill, searchInput, sessionToken, tab, userCoords]);
+  }, [fetchPlaceDetails, isOpen, quickAddPlaceId, quickAddSession]);
+
+  const autocomplete = usePlacesAutocompleteQuery({
+    query: searchInput,
+    sessionToken,
+    coords: userCoords,
+    enabled:
+      isOpen && tab === "search" && !prefill && !alreadySaved && !isResolving && !quickAddPlaceId,
+    debounceMs: 250,
+  });
+
+  const activeSearchError =
+    searchError ?? (autocomplete.error instanceof Error ? autocomplete.error.message : null);
 
   async function handleClipboardPaste() {
     setLinkError(null);
@@ -260,35 +287,7 @@ export function AddSheet() {
   }
 
   async function handleSelectSuggestion(item: AutocompleteSuggestionItem) {
-    setSearchError(null);
-    setAlreadySaved(null);
-    setPrefill(null);
-    setIsResolving(true);
-
-    try {
-      const res = await fetch("/api/places/details", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          googlePlaceId: item.googlePlaceId,
-          sessionToken,
-        }),
-      });
-      const data = await readApiResponse<ResolvePlaceResponse>(res);
-      setSessionToken(crypto.randomUUID());
-
-      if (data.alreadySaved) {
-        setAlreadySaved(data.existingRestaurant);
-      } else {
-        setPrefill(data.prefill);
-      }
-    } catch (error) {
-      setSearchError(
-        error instanceof Error ? error.message : "Couldn't load details for that restaurant.",
-      );
-    } finally {
-      setIsResolving(false);
-    }
+    await fetchPlaceDetails(item.googlePlaceId);
   }
 
   function switchToSearchWithHint() {
@@ -352,20 +351,6 @@ export function AddSheet() {
             <button
               type="button"
               onClick={() => {
-                setTab("link");
-                setAlreadySaved(null);
-              }}
-              className={cn(
-                "inline-flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-full text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
-                tab === "link" ? "bg-surface text-ink shadow-2xs" : "text-muted hover:text-ink",
-              )}
-            >
-              <Link2 className="size-4" aria-hidden="true" />
-              Paste link
-            </button>
-            <button
-              type="button"
-              onClick={() => {
                 setTab("search");
                 setAlreadySaved(null);
               }}
@@ -377,6 +362,20 @@ export function AddSheet() {
               <Search className="size-4" aria-hidden="true" />
               Search
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTab("link");
+                setAlreadySaved(null);
+              }}
+              className={cn(
+                "inline-flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-full text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                tab === "link" ? "bg-surface text-ink shadow-2xs" : "text-muted hover:text-ink",
+              )}
+            >
+              <Link2 className="size-4" aria-hidden="true" />
+              Paste link
+            </button>
           </div>
         ) : null}
 
@@ -385,7 +384,16 @@ export function AddSheet() {
         ) : prefill ? (
           <ConfirmPlaceForm
             prefill={prefill}
-            onBack={() => setPrefill(null)}
+            onBack={() => {
+              setPrefill(null);
+              if (quickAddPlaceId) {
+                const next = new URLSearchParams(searchParams.toString());
+                next.delete("placeId");
+                next.delete("session");
+                const qs = next.toString();
+                router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+              }
+            }}
             onSaved={(saved) => closeSheet(saved.id)}
           />
         ) : alreadySaved ? (
@@ -498,9 +506,7 @@ export function AddSheet() {
                     const nextValue = e.target.value;
                     setSearchInput(nextValue);
                     if (nextValue.trim().length < 3) {
-                      setSuggestions([]);
                       setSearchError(null);
-                      setIsSearching(false);
                     }
                   }}
                   placeholder="Type at least 3 letters (e.g. Tartine)"
@@ -512,9 +518,7 @@ export function AddSheet() {
                     aria-label="Clear search"
                     onClick={() => {
                       setSearchInput("");
-                      setSuggestions([]);
                       setSearchError(null);
-                      setIsSearching(false);
                     }}
                     className="absolute top-1/2 right-2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-muted hover:text-ink"
                   >
@@ -536,16 +540,16 @@ export function AddSheet() {
               </Button>
             </div>
 
-            {searchError ? (
+            {activeSearchError ? (
               <p
                 role="alert"
                 className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger"
               >
-                {searchError}
+                {activeSearchError}
               </p>
             ) : null}
 
-            {isSearching ? (
+            {autocomplete.isLoading ? (
               <div className="space-y-2 py-1" aria-label="Searching restaurants">
                 <Skeleton className="h-14 w-full" />
                 <Skeleton className="h-14 w-full" />
@@ -556,10 +560,10 @@ export function AddSheet() {
                 Keep typing ({3 - searchInput.trim().length} more character
                 {3 - searchInput.trim().length === 1 ? "" : "s"})...
               </p>
-            ) : suggestions.length > 0 ? (
+            ) : autocomplete.suggestions.length > 0 ? (
               <div className="space-y-1.5">
                 <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
-                  {suggestions.map((item) => (
+                  {autocomplete.suggestions.map((item) => (
                     <li key={item.googlePlaceId}>
                       <button
                         type="button"

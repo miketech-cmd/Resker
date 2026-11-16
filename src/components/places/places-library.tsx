@@ -8,7 +8,10 @@ import {
   ChevronUp,
   Globe2,
   Layers,
+  LayoutList,
   MapPin,
+  Plus,
+  Rows3,
   Search,
   SlidersHorizontal,
   Utensils,
@@ -25,6 +28,9 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Label } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { mapCuisinesToFoodIcon } from "@/lib/places/cuisines";
+import { usePlacesDensity, type PlacesDensity } from "@/lib/places/density-store";
 import {
   FACET_REGISTRY,
   extractFacetOptions,
@@ -47,7 +53,12 @@ import {
 } from "@/lib/places/filter-state";
 import { setSharedFilters } from "@/lib/places/filter-store";
 import { usePlansQuery } from "@/lib/queries/plans";
-import { useRestaurantsQuery, type UserRestaurantItem } from "@/lib/queries/restaurants";
+import {
+  usePlacesAutocompleteQuery,
+  useRestaurantsQuery,
+  type AutocompleteSuggestionItem,
+  type UserRestaurantItem,
+} from "@/lib/queries/restaurants";
 import { cn } from "@/lib/utils";
 import { RESTAURANT_STATUSES, STATUS_LABELS, type RestaurantStatus } from "@/lib/validation/places";
 
@@ -64,18 +75,20 @@ const DynamicAddToListsSheet = dynamic(
 function VirtualizedPlaceCards({
   items,
   highlightId,
+  density,
   onQuickFilter,
   onOpenLists,
 }: {
   items: UserRestaurantItem[];
   highlightId: string | null;
+  density: PlacesDensity;
   onQuickFilter: (facetId: FacetId, key: string) => void;
   onOpenLists: (item: UserRestaurantItem) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const virtualizer = useWindowVirtualizer({
     count: items.length,
-    estimateSize: () => 176,
+    estimateSize: () => (density === "compact" ? 76 : 176),
     overscan: 6,
   });
 
@@ -95,13 +108,17 @@ function VirtualizedPlaceCards({
               key={item.id}
               data-index={virtualRow.index}
               ref={virtualizer.measureElement}
-              className="absolute top-0 left-0 w-full pb-3"
+              className={cn(
+                "absolute top-0 left-0 w-full",
+                density === "compact" ? "pb-1.5" : "pb-3",
+              )}
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
               }}
             >
               <PlaceCard
                 item={item}
+                density={density}
                 highlighted={highlightId === item.id}
                 onQuickFilter={onQuickFilter}
                 onOpenLists={onOpenLists}
@@ -139,8 +156,38 @@ export function PlacesLibrary({
   const effectiveQuery = searchDraft ?? filters.q;
   const deferredQuery = useDeferredValue(effectiveQuery);
 
+  const [density, setDensity] = usePlacesDensity();
+  const [includeGoogleMaps, setIncludeGoogleMaps] = useState(true);
+  const [googleSessionToken, setGoogleSessionToken] = useState(() => crypto.randomUUID());
+
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [listTarget, setListTarget] = useState<UserRestaurantItem | null>(null);
+
+  const trimmedQuery = effectiveQuery.trim();
+  const isUnifiedSearchActive = trimmedQuery.length >= 3;
+  const googleSearch = usePlacesAutocompleteQuery({
+    query: effectiveQuery,
+    sessionToken: googleSessionToken,
+    enabled: isUnifiedSearchActive && includeGoogleMaps && restaurants.length > 0,
+    debounceMs: 350,
+  });
+
+  const savedByGooglePlaceId = useMemo(() => {
+    const map = new Map<string, UserRestaurantItem>();
+    for (const r of restaurants) {
+      map.set(r.googlePlaceId, r);
+    }
+    return map;
+  }, [restaurants]);
+
+  function handleQuickAddFromGoogle(suggestion: AutocompleteSuggestionItem) {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("add", "1");
+    next.set("placeId", suggestion.googlePlaceId);
+    next.set("session", googleSessionToken);
+    setGoogleSessionToken(crypto.randomUUID());
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  }
 
   const effectiveFilters = useMemo<LibraryFilters>(
     () => ({
@@ -392,7 +439,7 @@ export function PlacesLibrary({
                 type="search"
                 value={effectiveQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search restaurants, cities, cuisines, notes..."
+                placeholder="Search places or Google Maps..."
                 className="pl-10 pr-10"
               />
               {effectiveQuery ? (
@@ -401,6 +448,7 @@ export function PlacesLibrary({
                   aria-label="Clear search"
                   onClick={() => {
                     setSearchDraft("");
+                    setGoogleSessionToken(crypto.randomUUID());
                     updateUrlFilters({ ...filters, q: "" });
                   }}
                   className="absolute top-1/2 right-2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-muted hover:text-ink"
@@ -410,27 +458,97 @@ export function PlacesLibrary({
               ) : null}
             </div>
 
-            {quickSuggestions.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5" aria-label="Quick facet matches">
-                <span className="text-xs text-muted">Filter by:</span>
-                {quickSuggestions.map((suggestion) => (
-                  <button
-                    key={`${suggestion.facetId}:${suggestion.key}`}
-                    type="button"
-                    onClick={() => {
-                      setSearchDraft("");
-                      updateUrlFilters(
-                        toggleFacetValue({ ...filters, q: "" }, suggestion.facetId, suggestion.key),
-                      );
-                    }}
-                    className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2.5 text-xs font-medium text-ink transition-colors hover:bg-accent/20"
-                  >
-                    <span className="text-muted">{suggestion.facetLabel}:</span>
-                    <span>{suggestion.label}</span>
-                    <span className="text-muted tabular-nums">({suggestion.count})</span>
-                  </button>
-                ))}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-pressed={includeGoogleMaps}
+                  onClick={() => setIncludeGoogleMaps((prev) => !prev)}
+                  className={cn(
+                    "inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                    includeGoogleMaps
+                      ? "border-accent/45 bg-accent/12 text-ink hover:bg-accent/20"
+                      : "border-border bg-surface text-muted hover:text-ink",
+                  )}
+                >
+                  <MapPin
+                    className={cn("size-3.5", includeGoogleMaps ? "text-accent" : "text-muted")}
+                    aria-hidden="true"
+                  />
+                  <span>Include Google Maps</span>
+                </button>
+
+                {quickSuggestions.length > 0 ? (
+                  <>
+                    <span className="pl-1 text-xs text-muted">Filter by:</span>
+                    {quickSuggestions.map((suggestion) => (
+                      <button
+                        key={`${suggestion.facetId}:${suggestion.key}`}
+                        type="button"
+                        onClick={() => {
+                          setSearchDraft("");
+                          updateUrlFilters(
+                            toggleFacetValue(
+                              { ...filters, q: "" },
+                              suggestion.facetId,
+                              suggestion.key,
+                            ),
+                          );
+                        }}
+                        className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2.5 text-xs font-medium text-ink transition-colors hover:bg-accent/20"
+                      >
+                        <span className="text-muted">{suggestion.facetLabel}:</span>
+                        <span>{suggestion.label}</span>
+                        <span className="text-muted tabular-nums">({suggestion.count})</span>
+                      </button>
+                    ))}
+                  </>
+                ) : null}
               </div>
+
+              <div
+                role="group"
+                aria-label="Card density"
+                className="ml-auto inline-flex shrink-0 items-center rounded-full border border-border bg-surface-elevated p-0.5"
+              >
+                <button
+                  type="button"
+                  aria-pressed={density === "comfortable"}
+                  onClick={() => setDensity("comfortable")}
+                  title="Default view"
+                  className={cn(
+                    "inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                    density === "comfortable"
+                      ? "bg-ink text-bg shadow-2xs"
+                      : "text-muted hover:text-ink",
+                  )}
+                >
+                  <LayoutList className="size-3.5" aria-hidden="true" />
+                  <span>Default</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={density === "compact"}
+                  onClick={() => setDensity("compact")}
+                  title="Compact view"
+                  className={cn(
+                    "inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                    density === "compact"
+                      ? "bg-ink text-bg shadow-2xs"
+                      : "text-muted hover:text-ink",
+                  )}
+                >
+                  <Rows3 className="size-3.5" aria-hidden="true" />
+                  <span>Compact</span>
+                </button>
+              </div>
+            </div>
+
+            {trimmedQuery.length > 0 && trimmedQuery.length < 3 && includeGoogleMaps ? (
+              <p className="text-xs text-muted">
+                Type {3 - trimmedQuery.length} more letter
+                {3 - trimmedQuery.length === 1 ? "" : "s"} for Google Maps
+              </p>
             ) : null}
           </div>
 
@@ -584,7 +702,157 @@ export function PlacesLibrary({
           </div>
 
           {/* Results area */}
-          {filteredRestaurants.length === 0 ? (
+          {isUnifiedSearchActive ? (
+            <div className="space-y-6">
+              <section aria-label="From your Saved Places" className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="font-serif text-lg font-medium text-ink">
+                    From your Saved Places
+                  </h2>
+                  <span className="rounded-full bg-surface-elevated px-2.5 py-0.5 text-xs font-medium text-muted tabular-nums">
+                    {filteredRestaurants.length}
+                  </span>
+                </div>
+
+                {filteredRestaurants.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-border bg-surface/60 px-4 py-4 text-sm text-muted">
+                    No saved places match &ldquo;{trimmedQuery}&rdquo;.
+                    {!includeGoogleMaps ? (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          onClick={() => setIncludeGoogleMaps(true)}
+                          className="cursor-pointer font-medium text-accent underline underline-offset-2"
+                        >
+                          Search Google Maps
+                        </button>
+                      </>
+                    ) : null}
+                  </p>
+                ) : filteredRestaurants.length > 100 ? (
+                  <VirtualizedPlaceCards
+                    key={density}
+                    items={filteredRestaurants}
+                    density={density}
+                    highlightId={highlightId}
+                    onQuickFilter={handleQuickFilter}
+                    onOpenLists={setListTarget}
+                  />
+                ) : (
+                  <div className={density === "compact" ? "space-y-1.5" : "space-y-3"}>
+                    {filteredRestaurants.map((item) => (
+                      <PlaceCard
+                        key={item.id}
+                        item={item}
+                        density={density}
+                        highlighted={highlightId === item.id}
+                        onQuickFilter={handleQuickFilter}
+                        onOpenLists={setListTarget}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {includeGoogleMaps ? (
+                <section aria-label="From Google Maps" className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-serif text-lg font-medium text-ink">From Google Maps</h2>
+                      {!googleSearch.isLoading && !googleSearch.error ? (
+                        <span className="rounded-full bg-surface-elevated px-2.5 py-0.5 text-xs font-medium text-muted tabular-nums">
+                          {googleSearch.suggestions.length}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="flex items-center gap-1 text-[11px] text-muted">
+                      <MapPin className="size-3" aria-hidden="true" />
+                      Powered by Google
+                    </span>
+                  </div>
+
+                  {googleSearch.isLoading ? (
+                    <div className="space-y-2" aria-label="Searching Google Maps">
+                      <Skeleton className="h-14 w-full" />
+                      <Skeleton className="h-14 w-full" />
+                      <Skeleton className="h-14 w-full" />
+                    </div>
+                  ) : googleSearch.error ? (
+                    <p className="rounded-2xl border border-border bg-surface-elevated/60 px-4 py-3 text-xs text-muted">
+                      {googleSearch.error instanceof Error
+                        ? googleSearch.error.message
+                        : "Could not load Google Maps results right now."}
+                    </p>
+                  ) : typeof navigator !== "undefined" && navigator.onLine === false ? (
+                    <p className="rounded-2xl border border-border bg-surface-elevated/60 px-4 py-3 text-xs text-muted">
+                      You&apos;re offline — showing saved places only.
+                    </p>
+                  ) : googleSearch.suggestions.length > 0 ? (
+                    <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
+                      {googleSearch.suggestions.map((suggestion) => {
+                        const existingSaved = savedByGooglePlaceId.get(suggestion.googlePlaceId);
+                        const rowContent = (
+                          <>
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-elevated text-accent">
+                              <FoodIcon
+                                name={mapCuisinesToFoodIcon(suggestion.cuisines)}
+                                className="size-4"
+                              />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium text-ink">
+                                {suggestion.mainText}
+                              </span>
+                              {suggestion.secondaryText ? (
+                                <span className="block truncate text-xs text-muted">
+                                  {suggestion.secondaryText}
+                                </span>
+                              ) : null}
+                            </span>
+                            {existingSaved ? (
+                              <span className="inline-flex min-h-7 shrink-0 items-center rounded-full bg-tried-bg px-2.5 text-xs font-medium text-tried-ink">
+                                Saved · Open
+                              </span>
+                            ) : (
+                              <span className="inline-flex min-h-7 shrink-0 items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2.5 text-xs font-medium text-accent">
+                                <Plus className="size-3.5" aria-hidden="true" />
+                                Add
+                              </span>
+                            )}
+                          </>
+                        );
+                        const rowClassName =
+                          "flex min-h-14 w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-surface-elevated/70 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-ring";
+
+                        return (
+                          <li key={suggestion.googlePlaceId}>
+                            {existingSaved ? (
+                              <Link href={`/places/${existingSaved.id}`} className={rowClassName}>
+                                {rowContent}
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickAddFromGoogle(suggestion)}
+                                className={cn(rowClassName, "cursor-pointer")}
+                              >
+                                {rowContent}
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : googleSearch.debouncedQuery.length >= 3 ? (
+                    <p className="rounded-2xl border border-dashed border-border bg-surface/60 px-4 py-3 text-xs text-muted">
+                      No Google Maps matches for &ldquo;{trimmedQuery}&rdquo;. Try including a city.
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
+            </div>
+          ) : filteredRestaurants.length === 0 ? (
             <EmptyState
               title="No matching spots"
               description="Try clearing a city, cuisine, or search filter to see more restaurants."
@@ -747,11 +1015,12 @@ export function PlacesLibrary({
 
                       {!collapsed ? (
                         <div className="mt-2.5 rounded-2xl border border-border/80 bg-surface-elevated/55 p-2.5 sm:p-3 dark:border-border/75 dark:bg-[#191512]">
-                          <div className="space-y-2.5">
+                          <div className={density === "compact" ? "space-y-1.5" : "space-y-2.5"}>
                             {group.items.map((item) => (
                               <PlaceCard
                                 key={`${group.key}-${item.id}`}
                                 item={item}
+                                density={density}
                                 highlighted={highlightId === item.id}
                                 onQuickFilter={handleQuickFilter}
                                 onOpenLists={setListTarget}
@@ -767,17 +1036,20 @@ export function PlacesLibrary({
             </div>
           ) : filteredRestaurants.length > 100 ? (
             <VirtualizedPlaceCards
+              key={density}
               items={filteredRestaurants}
+              density={density}
               highlightId={highlightId}
               onQuickFilter={handleQuickFilter}
               onOpenLists={setListTarget}
             />
           ) : (
-            <div className="space-y-3">
+            <div className={density === "compact" ? "space-y-1.5" : "space-y-3"}>
               {filteredRestaurants.map((item) => (
                 <PlaceCard
                   key={item.id}
                   item={item}
+                  density={density}
                   highlighted={highlightId === item.id}
                   onQuickFilter={handleQuickFilter}
                   onOpenLists={setListTarget}

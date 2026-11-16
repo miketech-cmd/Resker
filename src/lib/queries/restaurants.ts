@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
 import type { FoodIconKey } from "@/components/icons/food-icons";
 import type {
@@ -254,4 +255,89 @@ export function useDeleteRestaurantMutation() {
       void queryClient.invalidateQueries({ queryKey: restaurantQueryKeys.all });
     },
   });
+}
+
+export async function fetchPlacesAutocomplete({
+  query,
+  sessionToken,
+  coords,
+  signal,
+}: {
+  query: string;
+  sessionToken: string;
+  coords?: { lat: number; lng: number } | null;
+  signal?: AbortSignal;
+}): Promise<AutocompleteSuggestionItem[]> {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    q: query,
+    session: sessionToken,
+  });
+  if (coords) {
+    params.set("lat", String(coords.lat));
+    params.set("lng", String(coords.lng));
+  }
+
+  const res = await fetch(`/api/places/autocomplete?${params.toString()}`, {
+    signal,
+    cache: "no-store",
+  });
+  const data = await readApiResponse<{ suggestions: AutocompleteSuggestionItem[] }>(res);
+  return data.suggestions;
+}
+
+export function usePlacesAutocompleteQuery({
+  query,
+  sessionToken,
+  coords = null,
+  enabled = true,
+  debounceMs = 350,
+}: {
+  query: string;
+  sessionToken: string;
+  coords?: { lat: number; lng: number } | null;
+  enabled?: boolean;
+  debounceMs?: number;
+}) {
+  const trimmed = query.trim();
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    if (!enabled || trimmed.length < 3) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(trimmed);
+    }, debounceMs);
+    return () => window.clearTimeout(timer);
+  }, [debounceMs, enabled, trimmed]);
+
+  const activeQuery = enabled && trimmed.length >= 3 ? debouncedQuery : "";
+  const isDebouncing = enabled && trimmed.length >= 3 && activeQuery !== trimmed;
+  const normalizedKey = activeQuery.toLowerCase();
+  const coordKey = coords ? `${coords.lat.toFixed(2)},${coords.lng.toFixed(2)}` : "none";
+
+  const queryResult = useQuery({
+    queryKey: ["places", "autocomplete", normalizedKey, coordKey] as const,
+    queryFn: ({ signal }) =>
+      fetchPlacesAutocomplete({
+        query: activeQuery,
+        sessionToken,
+        coords,
+        signal,
+      }),
+    enabled: enabled && activeQuery.length >= 3,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  return {
+    suggestions: activeQuery.length >= 3 ? (queryResult.data ?? []) : [],
+    isLoading: isDebouncing || (activeQuery.length >= 3 && queryResult.isFetching),
+    error: activeQuery.length >= 3 ? queryResult.error : null,
+    debouncedQuery: activeQuery,
+  };
 }

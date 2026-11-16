@@ -1,15 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AddSheet } from "./add-sheet";
 
 const replaceMock = vi.fn();
 
+let currentQueryString = "add=1";
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/places",
   useRouter: () => ({ replace: replaceMock }),
-  useSearchParams: () => new URLSearchParams("add=1"),
+  useSearchParams: () => new URLSearchParams(currentQueryString),
 }));
 
 vi.mock("vaul", () => ({
@@ -37,6 +39,7 @@ function renderAddSheet() {
 
 describe("AddSheet", () => {
   beforeEach(() => {
+    currentQueryString = "add=1";
     replaceMock.mockReset();
   });
 
@@ -45,10 +48,17 @@ describe("AddSheet", () => {
     vi.useRealTimers();
   });
 
-  it("validates invalid URLs client-side without calling /api/places/resolve", async () => {
+  it("defaults to Search tab first and opens Paste link on click for invalid URL validation", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     renderAddSheet();
 
+    expect(screen.getByLabelText("Search restaurants")).toBeInTheDocument();
+    const tabButtons = screen
+      .getAllByRole("button")
+      .filter((btn) => btn.textContent === "Search" || btn.textContent === "Paste link");
+    expect(tabButtons.map((btn) => btn.textContent)).toEqual(["Search", "Paste link"]);
+
+    fireEvent.click(screen.getByRole("button", { name: /Paste link/i }));
     const input = screen.getByLabelText("Google Maps URL");
     fireEvent.change(input, { target: { value: "https://example.com/not-maps" } });
     fireEvent.click(screen.getByRole("button", { name: "Look up place" }));
@@ -93,6 +103,7 @@ describe("AddSheet", () => {
     );
 
     renderAddSheet();
+    fireEvent.click(screen.getByRole("button", { name: /Paste link/i }));
     fireEvent.change(screen.getByLabelText("Google Maps URL"), {
       target: { value: "https://maps.app.goo.gl/abc123" },
     });
@@ -106,8 +117,6 @@ describe("AddSheet", () => {
   });
 
   it("debounces Search tab autocomplete and completes the confirm-and-save flow", async () => {
-    vi.useFakeTimers();
-
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
@@ -180,18 +189,15 @@ describe("AddSheet", () => {
       );
 
     renderAddSheet();
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
     fireEvent.change(screen.getByLabelText("Search restaurants"), {
       target: { value: "Tartine" },
     });
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(260);
-    });
-
-    vi.useRealTimers();
-
-    const suggestionBtn = await screen.findByRole("button", { name: /Tartine Bakery/ });
+    const suggestionBtn = await screen.findByRole(
+      "button",
+      { name: /Tartine Bakery/ },
+      { timeout: 2500 },
+    );
     fireEvent.click(suggestionBtn);
 
     const saveBtn = await screen.findByRole("button", { name: "Save to To Try" });
@@ -201,5 +207,47 @@ describe("AddSheet", () => {
       expect(replaceMock).toHaveBeenCalledWith("/places?highlight=rest-new", { scroll: false });
     });
     expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("resolves placeId & session quick-add params directly into ConfirmPlaceForm", async () => {
+    currentQueryString = "add=1&placeId=ChIJBVY2Bxh-j4ARa2zO8Jd6H2A&session=sess-home-1";
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          alreadySaved: false,
+          googlePlaceId: "ChIJBVY2Bxh-j4ARa2zO8Jd6H2A",
+          existingRestaurant: null,
+          prefill: {
+            googlePlaceId: "ChIJBVY2Bxh-j4ARa2zO8Jd6H2A",
+            name: "Tartine Bakery",
+            address: "600 Guerrero St, San Francisco, CA",
+            city: "San Francisco",
+            countryCode: "US",
+            lat: 37.7614,
+            lng: -122.4241,
+            cuisines: ["Bakery"],
+            priceLevel: 1,
+            googleMapsUri: "https://maps.google.com/?cid=6926389544917822571",
+            suggestedFoodIcon: "croissant",
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    renderAddSheet();
+
+    expect(await screen.findByRole("button", { name: "Save to To Try" })).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/places/details",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          googlePlaceId: "ChIJBVY2Bxh-j4ARa2zO8Jd6H2A",
+          sessionToken: "sess-home-1",
+        }),
+      }),
+    );
   });
 });

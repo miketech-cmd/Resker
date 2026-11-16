@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useSyncExternalStore } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PlacesLibrary } from "./places-library";
 import type { UserRestaurantItem } from "@/lib/queries/restaurants";
@@ -140,6 +140,11 @@ describe("PlacesLibrary", () => {
     setTestQueryString("");
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
   it("filters accurately via FilterSheet city selection and preserves applied filters on close", async () => {
     renderLibrary();
 
@@ -211,5 +216,78 @@ describe("PlacesLibrary", () => {
     fireEvent.click(screen.getByRole("tab", { name: /Tried/ }));
     expect(screen.queryByText("Hangawi")).not.toBeInTheDocument();
     expect(screen.getByText("Honest Restaurant")).toBeInTheDocument();
+  });
+
+  it("breaks out Saved Places and Google Maps results and triggers quick-add handoff", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.startsWith("/api/places/autocomplete")) {
+        return new Response(
+          JSON.stringify({
+            suggestions: [
+              {
+                googlePlaceId: "ChIJBVY2Bxh-j4ARa2zO8Jd6H2A",
+                mainText: "Tartine Bakery",
+                secondaryText: "600 Guerrero St, San Francisco, CA",
+                fullText: "Tartine Bakery, San Francisco",
+                cuisines: ["Bakery"],
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url === "/api/plans") {
+        return new Response(JSON.stringify({ plans: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ restaurants: SAMPLE_RESTAURANTS }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    renderLibrary();
+
+    const googleToggle = screen.getByRole("button", { name: /Include Google Maps/i });
+    expect(googleToggle).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.change(screen.getByLabelText("Search saved restaurants"), {
+      target: { value: "Tartine" },
+    });
+
+    expect(screen.getByRole("heading", { name: "From your Saved Places" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "From Google Maps" })).toBeInTheDocument();
+    expect(screen.getByText("Powered by Google")).toBeInTheDocument();
+
+    const addBtn = await screen.findByRole(
+      "button",
+      { name: /Tartine Bakery/i },
+      { timeout: 2500 },
+    );
+    fireEvent.click(addBtn);
+
+    expect(replaceMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/places\?.*add=1.*placeId=ChIJBVY2Bxh-j4ARa2zO8Jd6H2A.*session=/),
+    );
+  });
+
+  it("toggles between Default and Compact density and persists in localStorage", () => {
+    window.localStorage.removeItem("resker:places-density");
+    renderLibrary();
+
+    const firstCard = screen.getByText("Hangawi").closest("[data-density]");
+    expect(firstCard).toHaveAttribute("data-density", "comfortable");
+
+    fireEvent.click(screen.getByRole("button", { name: "Compact" }));
+    expect(window.localStorage.getItem("resker:places-density")).toBe("compact");
+
+    const updatedCard = screen.getByText("Hangawi").closest("[data-density]");
+    expect(updatedCard).toHaveAttribute("data-density", "compact");
+
+    fireEvent.click(screen.getByRole("button", { name: "Default" }));
+    expect(window.localStorage.getItem("resker:places-density")).toBe("comfortable");
   });
 });
