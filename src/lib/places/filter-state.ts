@@ -28,6 +28,19 @@ function parseCsvParam(raw: string | null): string[] {
   return out;
 }
 
+function parseIdListParam(raw: string | null): string[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(",")) {
+    const clean = part.trim();
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    out.push(clean);
+  }
+  return out;
+}
+
 export function parseFiltersFromSearchParams(params: URLSearchParams): LibraryFilters {
   const facets: Partial<Record<FacetId, string[]>> = {};
 
@@ -38,6 +51,8 @@ export function parseFiltersFromSearchParams(params: URLSearchParams): LibraryFi
       facets[def.id] = values;
     }
   }
+
+  const listIds = parseIdListParam(params.get("list"));
 
   const rawMinRating = params.get("minRating");
   const parsedRating = rawMinRating ? Number(rawMinRating) : NaN;
@@ -57,6 +72,7 @@ export function parseFiltersFromSearchParams(params: URLSearchParams): LibraryFi
   return {
     q: params.get("q") ?? "",
     facets,
+    listIds,
     minRatingHalf,
     groupBy,
     groupSort,
@@ -89,6 +105,12 @@ export function serializeFiltersToSearchParams(
     } else {
       next.delete(def.urlParam);
     }
+  }
+
+  if (filters.listIds.length > 0) {
+    next.set("list", filters.listIds.join(","));
+  } else {
+    next.delete("list");
   }
 
   if (filters.minRatingHalf !== null) {
@@ -160,10 +182,24 @@ export function setSingleFacetValue(
   };
 }
 
+export function toggleListFilterValue(filters: LibraryFilters, listId: string): LibraryFilters {
+  const clean = listId.trim();
+  if (!clean) return filters;
+  const exists = filters.listIds.includes(clean);
+  const nextListIds = exists
+    ? filters.listIds.filter((item) => item !== clean)
+    : [...filters.listIds, clean];
+  return {
+    ...filters,
+    listIds: nextListIds,
+  };
+}
+
 export function clearAllLibraryFilters(current?: LibraryFilters): LibraryFilters {
   return {
     ...DEFAULT_LIBRARY_FILTERS,
     facets: {},
+    listIds: [],
     groupBy: current?.groupBy ?? "none",
     groupSort: current?.groupSort ?? "count_desc",
   };
@@ -180,6 +216,8 @@ export function countActiveSheetFilters(
     if (excluded.has(def.id)) continue;
     count += filters.facets[def.id]?.length ?? 0;
   }
+
+  count += filters.listIds.length;
 
   if (filters.minRatingHalf !== null) {
     count += 1;

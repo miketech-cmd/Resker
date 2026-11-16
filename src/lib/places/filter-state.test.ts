@@ -7,10 +7,11 @@ import {
   parseFiltersFromSearchParams,
   serializeFiltersToSearchParams,
   toggleFacetValue,
+  toggleListFilterValue,
 } from "@/lib/places/filter-state";
 
 describe("filter-state", () => {
-  it("round-trips facet filters, grouping, rating, and sort via URLSearchParams", () => {
+  it("round-trips facet filters, list filters, grouping, rating, and sort via URLSearchParams", () => {
     const existing = new URLSearchParams("highlight=abc-123");
     const state = {
       ...DEFAULT_LIBRARY_FILTERS,
@@ -21,6 +22,7 @@ describe("filter-state", () => {
         price: ["2"],
         status: ["tried"],
       },
+      listIds: ["list-1", "list-2"],
       minRatingHalf: 8,
       groupBy: "city" as const,
       groupSort: "alpha_asc" as const,
@@ -30,6 +32,7 @@ describe("filter-state", () => {
     const params = serializeFiltersToSearchParams(state, existing);
     expect(params.get("highlight")).toBe("abc-123");
     expect(params.get("city")).toBe("tokyo,san francisco");
+    expect(params.get("list")).toBe("list-1,list-2");
     expect(params.get("group")).toBe("city");
 
     const parsed = parseFiltersFromSearchParams(params);
@@ -43,18 +46,23 @@ describe("filter-state", () => {
     expect(parsed).toEqual(DEFAULT_LIBRARY_FILTERS);
   });
 
-  it("toggles facet selections and counts sheet filters accurately", () => {
+  it("toggles facet and list selections and counts sheet filters accurately", () => {
     let next = toggleFacetValue(DEFAULT_LIBRARY_FILTERS, "city", "Tokyo");
     next = toggleFacetValue(next, "cuisine", "Ramen");
     next = toggleFacetValue(next, "status", "tried");
+    next = toggleListFilterValue(next, "list-1");
 
-    expect(countActiveSheetFilters(next, { excludeFacets: ["status"] })).toBe(2);
+    expect(countActiveSheetFilters(next, { excludeFacets: ["status"] })).toBe(3);
 
     next = toggleFacetValue(next, "city", "tokyo");
     expect(next.facets.city).toBeUndefined();
 
-    const cleared = clearAllLibraryFilters({ ...next, groupBy: "cuisine" });
+    next = toggleListFilterValue(next, "list-1");
+    expect(next.listIds).toEqual([]);
+
+    const cleared = clearAllLibraryFilters({ ...next, listIds: ["list-1"], groupBy: "cuisine" });
     expect(cleared.facets).toEqual({});
+    expect(cleared.listIds).toEqual([]);
     expect(cleared.groupBy).toBe("cuisine");
   });
 });

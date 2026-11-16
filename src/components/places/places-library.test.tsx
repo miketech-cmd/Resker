@@ -243,6 +243,12 @@ describe("PlacesLibrary", () => {
           headers: { "Content-Type": "application/json" },
         });
       }
+      if (url === "/api/lists") {
+        return new Response(JSON.stringify({ lists: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ restaurants: SAMPLE_RESTAURANTS }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -289,5 +295,70 @@ describe("PlacesLibrary", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Default" }));
     expect(window.localStorage.getItem("resker:places-density")).toBe("comfortable");
+  });
+
+  it("filters spots by List membership inside FilterSheet and removes active List chip", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/lists") {
+        return new Response(
+          JSON.stringify({
+            lists: [
+              {
+                id: "list-date-night",
+                name: "Date Night",
+                description: null,
+                icon: "wine",
+                itemCount: 1,
+                restaurantIds: ["1"],
+                placeIds: ["p1"],
+                createdAt: "2026-11-14T00:00:00.000Z",
+                updatedAt: "2026-11-14T00:00:00.000Z",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url === "/api/plans") {
+        return new Response(JSON.stringify({ plans: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url === "/api/lists") {
+        return new Response(JSON.stringify({ lists: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ restaurants: SAMPLE_RESTAURANTS }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    renderLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+    const dialog = await screen.findByRole("dialog");
+
+    const listChip = await within(dialog).findByRole("button", { name: /Date Night/ });
+    fireEvent.click(listChip);
+
+    const applyBtn = await within(dialog).findByRole("button", { name: "Show 1 spot" });
+    fireEvent.click(applyBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Hangawi")).toBeInTheDocument();
+    expect(screen.queryByText("Rubirosa")).not.toBeInTheDocument();
+    expect(screen.queryByText("Honest Restaurant")).not.toBeInTheDocument();
+
+    const activeChip = screen.getByRole("button", { name: /List: Date Night/ });
+    fireEvent.click(activeChip);
+    expect(screen.getByText("Rubirosa")).toBeInTheDocument();
   });
 });

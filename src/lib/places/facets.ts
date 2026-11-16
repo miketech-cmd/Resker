@@ -46,10 +46,17 @@ export interface FacetDefinition<TId extends FacetId = FacetId> {
 export interface LibraryFilters {
   q: string;
   facets: Partial<Record<FacetId, string[]>>;
+  listIds: string[];
   minRatingHalf: number | null;
   groupBy: GroupByOption;
   groupSort: GroupSortOption;
   sort: SortOption;
+}
+
+export interface ListFilterMembership {
+  id: string;
+  restaurantIds: readonly string[];
+  placeIds?: readonly string[];
 }
 
 export interface FacetGroup {
@@ -72,6 +79,7 @@ export interface QuickFacetSuggestion {
 export const DEFAULT_LIBRARY_FILTERS: LibraryFilters = {
   q: "",
   facets: {},
+  listIds: [],
   minRatingHalf: null,
   groupBy: "none",
   groupSort: "count_desc",
@@ -229,10 +237,42 @@ function matchesTextQuery(item: UserRestaurantItem, normalizedQuery: string): bo
   return item.cuisines.some((tag) => tag.toLowerCase().includes(normalizedQuery));
 }
 
+export interface ListMatchSets {
+  restaurantIds: Set<string>;
+  placeIds: Set<string>;
+}
+
+export function buildListMatchSets(
+  lists: readonly ListFilterMembership[],
+  listIds: readonly string[],
+): ListMatchSets | null {
+  if (listIds.length === 0) return null;
+  const targetIds = new Set(listIds);
+  const restaurantIds = new Set<string>();
+  const placeIds = new Set<string>();
+  for (const list of lists) {
+    if (!targetIds.has(list.id)) continue;
+    for (const rId of list.restaurantIds) {
+      restaurantIds.add(rId);
+    }
+    if (list.placeIds) {
+      for (const pId of list.placeIds) {
+        placeIds.add(pId);
+      }
+    }
+  }
+  return { restaurantIds, placeIds };
+}
+
 export function matchesLibraryFilters(
   item: UserRestaurantItem,
   filters: LibraryFilters,
-  options?: { excludeFacetId?: FacetId },
+  options?: {
+    excludeFacetId?: FacetId;
+    excludeListFilter?: boolean;
+    lists?: readonly ListFilterMembership[];
+    listSets?: ListMatchSets | null;
+  },
 ): boolean {
   const normalizedQuery = filters.q.trim().toLowerCase();
   if (normalizedQuery && !matchesTextQuery(item, normalizedQuery)) {
@@ -241,6 +281,15 @@ export function matchesLibraryFilters(
 
   if (filters.minRatingHalf !== null && (item.ratingHalf ?? 0) < filters.minRatingHalf) {
     return false;
+  }
+
+  if (!options?.excludeListFilter && filters.listIds.length > 0) {
+    const sets =
+      options?.listSets ??
+      (options?.lists !== undefined ? buildListMatchSets(options.lists, filters.listIds) : null);
+    if (sets && !sets.restaurantIds.has(item.id) && !sets.placeIds.has(item.placeId)) {
+      return false;
+    }
   }
 
   for (const facetId of FILTERABLE_FACET_IDS) {
@@ -290,8 +339,13 @@ export function sortRestaurants(
 export function filterAndSortRestaurants(
   items: readonly UserRestaurantItem[],
   filters: LibraryFilters,
+  options?: { lists?: readonly ListFilterMembership[] },
 ): UserRestaurantItem[] {
-  const filtered = items.filter((item) => matchesLibraryFilters(item, filters));
+  const listSets =
+    options?.lists !== undefined ? buildListMatchSets(options.lists, filters.listIds) : null;
+  const filtered = items.filter((item) =>
+    matchesLibraryFilters(item, filters, { lists: options?.lists, listSets }),
+  );
   return sortRestaurants(filtered, filters.sort);
 }
 
@@ -325,16 +379,23 @@ export function extractFacetOptions(
   options?: {
     filters?: LibraryFilters;
     excludeSelf?: boolean;
+    lists?: readonly ListFilterMembership[];
   },
 ): FacetOption[] {
   const definition = FACET_REGISTRY[facetId];
   const buckets = new Map<string, OptionAccumulator>();
+  const listSets =
+    options?.filters && options?.lists !== undefined
+      ? buildListMatchSets(options.lists, options.filters.listIds)
+      : null;
 
   for (const item of items) {
     if (
       options?.filters &&
       !matchesLibraryFilters(item, options.filters, {
         excludeFacetId: options.excludeSelf ? facetId : undefined,
+        lists: options.lists,
+        listSets,
       })
     ) {
       continue;

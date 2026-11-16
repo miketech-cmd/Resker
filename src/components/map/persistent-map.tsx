@@ -38,7 +38,8 @@ import {
   setSingleFacetValue,
 } from "@/lib/places/filter-state";
 import { setSharedFilters } from "@/lib/places/filter-store";
-import { useListDetailQuery } from "@/lib/queries/lists";
+import { usePendingDeleteIds } from "@/lib/places/pending-delete";
+import { useListDetailQuery, useListsQuery } from "@/lib/queries/lists";
 import { useRestaurantsQuery } from "@/lib/queries/restaurants";
 import { cn } from "@/lib/utils";
 import { RESTAURANT_STATUSES, STATUS_LABELS, type RestaurantStatus } from "@/lib/validation/places";
@@ -122,8 +123,18 @@ export function PersistentMap({ isActive }: { isActive: boolean }) {
   const searchParams = useSearchParams();
   const { resolvedTheme } = useTheme();
 
-  const { data: restaurants = [] } = useRestaurantsQuery();
-  const listId = isActive ? searchParams.get("list") : null;
+  const { data: rawRestaurants = [] } = useRestaurantsQuery();
+  const pendingDeleteIds = usePendingDeleteIds();
+  const restaurants = useMemo(
+    () =>
+      pendingDeleteIds.size === 0
+        ? rawRestaurants
+        : rawRestaurants.filter((item) => !pendingDeleteIds.has(item.id)),
+    [pendingDeleteIds, rawRestaurants],
+  );
+  const { data: lists } = useListsQuery(undefined, isActive);
+  const rawListParam = isActive ? searchParams.get("list") : null;
+  const listId = rawListParam && !rawListParam.includes(",") ? rawListParam : null;
   const listDetailQuery = useListDetailQuery(listId ?? "");
 
   const isFilterOpen = isActive && searchParams.get("filter") === "1";
@@ -211,8 +222,11 @@ export function PersistentMap({ isActive }: { isActive: boolean }) {
   }, [listDetailQuery.data, listId, restaurants]);
 
   const filteredSpots = useMemo(
-    () => filterAndSortRestaurants(scopedRestaurants, effectiveFilters),
-    [effectiveFilters, scopedRestaurants],
+    () =>
+      filterAndSortRestaurants(scopedRestaurants, effectiveFilters, {
+        lists: listId && listDetailQuery.data ? undefined : lists,
+      }),
+    [effectiveFilters, listDetailQuery.data, listId, lists, scopedRestaurants],
   );
 
   const mappableSpots = useMemo<MappableRestaurant[]>(
@@ -480,6 +494,7 @@ export function PersistentMap({ isActive }: { isActive: boolean }) {
           }}
           initialFilters={filters}
           allRestaurants={scopedRestaurants}
+          lists={lists}
           onApply={(next) => {
             setSearchDraft(next.q);
             updateMapUrlFilters(next, { openFilter: false });

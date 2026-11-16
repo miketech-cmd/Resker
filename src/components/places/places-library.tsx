@@ -50,8 +50,11 @@ import {
   serializeFiltersToSearchParams,
   setSingleFacetValue,
   toggleFacetValue,
+  toggleListFilterValue,
 } from "@/lib/places/filter-state";
 import { setSharedFilters } from "@/lib/places/filter-store";
+import { usePendingDeleteIds } from "@/lib/places/pending-delete";
+import { useListsQuery } from "@/lib/queries/lists";
 import { usePlansQuery } from "@/lib/queries/plans";
 import {
   usePlacesAutocompleteQuery,
@@ -143,7 +146,16 @@ export function PlacesLibrary({
   const isFilterOpen = searchParams.get("filter") === "1";
   const focusedSection = searchParams.get("section") as FacetId | null;
 
-  const { data: restaurants = initialRestaurants } = useRestaurantsQuery(initialRestaurants);
+  const { data: rawRestaurants = initialRestaurants } = useRestaurantsQuery(initialRestaurants);
+  const pendingDeleteIds = usePendingDeleteIds();
+  const restaurants = useMemo(
+    () =>
+      pendingDeleteIds.size === 0
+        ? rawRestaurants
+        : rawRestaurants.filter((item) => !pendingDeleteIds.has(item.id)),
+    [pendingDeleteIds, rawRestaurants],
+  );
+  const { data: lists } = useListsQuery();
   const { data: plans = [] } = usePlansQuery();
   const upcomingPlanCount = useMemo(
     () => plans.filter((plan) => plan.status === "planned").length,
@@ -274,16 +286,22 @@ export function PlacesLibrary({
       tried: 0,
     };
     for (const r of restaurants) {
-      if (!matchesLibraryFilters(r, effectiveFilters, { excludeFacetId: "status" })) continue;
+      if (!matchesLibraryFilters(r, effectiveFilters, { excludeFacetId: "status", lists }))
+        continue;
       counts.all += 1;
       counts[r.status] += 1;
     }
     return counts;
-  }, [effectiveFilters, restaurants]);
+  }, [effectiveFilters, lists, restaurants]);
 
   const filteredRestaurants = useMemo(
-    () => filterAndSortRestaurants(restaurants, effectiveFilters),
-    [effectiveFilters, restaurants],
+    () => filterAndSortRestaurants(restaurants, effectiveFilters, { lists }),
+    [effectiveFilters, lists, restaurants],
+  );
+
+  const listNameById = useMemo(
+    () => new Map((lists ?? []).map((list) => [list.id, list.name])),
+    [lists],
   );
 
   const groupedSections = useMemo(() => {
@@ -329,6 +347,7 @@ export function PlacesLibrary({
     Boolean(effectiveQuery.trim()) ||
     activeStatusList.length > 0 ||
     activeFacetChips.length > 0 ||
+    filters.listIds.length > 0 ||
     filters.minRatingHalf !== null ||
     filters.sort !== "updated_desc";
 
@@ -659,7 +678,9 @@ export function PlacesLibrary({
             </div>
 
             {/* Active filter removable chips */}
-            {activeFacetChips.length > 0 || filters.minRatingHalf !== null ? (
+            {activeFacetChips.length > 0 ||
+            filters.listIds.length > 0 ||
+            filters.minRatingHalf !== null ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 {activeFacetChips.map((chip) => (
                   <button
@@ -670,8 +691,20 @@ export function PlacesLibrary({
                     }
                     className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full border border-accent/35 bg-accent/10 px-2.5 text-xs font-medium text-ink hover:bg-accent/20"
                   >
-                    <span className="text-muted">{chip.facetLabel}:</span>
-                    <span>{chip.label}</span>
+                    <span className="text-muted">{chip.facetLabel}:</span> <span>{chip.label}</span>
+                    <X className="size-3 text-muted" aria-hidden="true" />
+                  </button>
+                ))}
+
+                {filters.listIds.map((listId) => (
+                  <button
+                    key={`list:${listId}`}
+                    type="button"
+                    onClick={() => updateUrlFilters(toggleListFilterValue(filters, listId))}
+                    className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full border border-accent/35 bg-accent/10 px-2.5 text-xs font-medium text-ink hover:bg-accent/20"
+                  >
+                    <span className="text-muted">List:</span>{" "}
+                    <span>{listNameById.get(listId) ?? "Saved list"}</span>
                     <X className="size-3 text-muted" aria-hidden="true" />
                   </button>
                 ))}
@@ -1069,6 +1102,7 @@ export function PlacesLibrary({
           }}
           initialFilters={filters}
           allRestaurants={restaurants}
+          lists={lists}
           focusedFacet={focusedSection}
           onApply={(next) => {
             setSearchDraft(next.q);

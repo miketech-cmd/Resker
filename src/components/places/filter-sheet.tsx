@@ -3,7 +3,7 @@
 import { RotateCcw, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { FoodIcon } from "@/components/icons/food-icons";
+import { FoodIcon, FOOD_ICON_KEYS, type FoodIconKey } from "@/components/icons/food-icons";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input, Label } from "@/components/ui/input";
@@ -13,12 +13,18 @@ import {
   FILTERABLE_FACET_IDS,
   extractFacetOptions,
   filterAndSortRestaurants,
+  matchesLibraryFilters,
   type FacetId,
   type GroupSortOption,
   type LibraryFilters,
   type SortOption,
 } from "@/lib/places/facets";
-import { clearAllLibraryFilters, toggleFacetValue } from "@/lib/places/filter-state";
+import {
+  clearAllLibraryFilters,
+  toggleFacetValue,
+  toggleListFilterValue,
+} from "@/lib/places/filter-state";
+import { useListsQuery, type ListSummaryItem } from "@/lib/queries/lists";
 import type { UserRestaurantItem } from "@/lib/queries/restaurants";
 import { cn } from "@/lib/utils";
 
@@ -38,11 +44,21 @@ const RATING_THRESHOLDS: Array<{ value: number | null; label: string }> = [
 
 const SHEET_FACET_IDS = FILTERABLE_FACET_IDS.filter((id) => id !== "status");
 
+const FOOD_ICON_SET = new Set<string>(FOOD_ICON_KEYS);
+
+function resolveListIconKey(icon: string | null | undefined): FoodIconKey {
+  if (icon && FOOD_ICON_SET.has(icon)) {
+    return icon as FoodIconKey;
+  }
+  return "bowl";
+}
+
 export function FilterSheet({
   open,
   onOpenChange,
   initialFilters,
   allRestaurants,
+  lists: providedLists,
   focusedFacet,
   onApply,
 }: {
@@ -50,16 +66,39 @@ export function FilterSheet({
   onOpenChange: (open: boolean) => void;
   initialFilters: LibraryFilters;
   allRestaurants: UserRestaurantItem[];
+  lists?: ListSummaryItem[];
   focusedFacet?: FacetId | null;
   onApply: (next: LibraryFilters) => void;
 }) {
   const [draft, setDraft] = useState<LibraryFilters>(initialFilters);
   const [facetSearchTerms, setFacetSearchTerms] = useState<Partial<Record<FacetId, string>>>({});
+  const { data: fetchedLists = [] } = useListsQuery(providedLists, providedLists === undefined);
+  const lists = providedLists ?? fetchedLists;
 
   const previewCount = useMemo(
-    () => filterAndSortRestaurants(allRestaurants, draft).length,
-    [allRestaurants, draft],
+    () => filterAndSortRestaurants(allRestaurants, draft, { lists }).length,
+    [allRestaurants, draft, lists],
   );
+
+  const listMatchCounts = useMemo(() => {
+    if (lists.length === 0) return new Map<string, number>();
+    const baseMatched = allRestaurants.filter((item) =>
+      matchesLibraryFilters(item, draft, { excludeListFilter: true }),
+    );
+    const counts = new Map<string, number>();
+    for (const list of lists) {
+      const restSet = new Set(list.restaurantIds);
+      const placeSet = new Set(list.placeIds ?? []);
+      let count = 0;
+      for (const item of baseMatched) {
+        if (restSet.has(item.id) || placeSet.has(item.placeId)) {
+          count += 1;
+        }
+      }
+      counts.set(list.id, count);
+    }
+    return counts;
+  }, [allRestaurants, draft, lists]);
 
   function handleReset() {
     setDraft(clearAllLibraryFilters(draft));
@@ -160,6 +199,7 @@ export function FilterSheet({
               extractFacetOptions(allRestaurants, facetId, {
                 filters: draft,
                 excludeSelf: true,
+                lists,
               }).map((opt) => [opt.key, opt.count]),
             );
 
@@ -255,6 +295,54 @@ export function FilterSheet({
               </section>
             );
           })}
+
+          {/* List Membership Filter */}
+          {lists.length > 0 ? (
+            <section id="filter-section-list" className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Lists</Label>
+                {draft.listIds.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setDraft((prev) => ({ ...prev, listIds: [] }))}
+                    className="cursor-pointer text-xs font-medium text-accent hover:underline"
+                  >
+                    Clear ({draft.listIds.length})
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {lists.map((list) => {
+                  const selected = draft.listIds.includes(list.id);
+                  const matchedCount = listMatchCounts.get(list.id) ?? 0;
+                  return (
+                    <Chip
+                      key={list.id}
+                      interactive
+                      selected={selected}
+                      onClick={() => setDraft((prev) => toggleListFilterValue(prev, list.id))}
+                      className="min-h-10 gap-1.5 px-3 text-sm"
+                    >
+                      <FoodIcon
+                        name={resolveListIconKey(list.icon)}
+                        className="size-3.5 shrink-0"
+                      />
+                      <span>{list.name}</span>
+                      <span
+                        className={cn(
+                          "text-xs tabular-nums",
+                          selected ? "text-accent-ink/80" : "text-muted",
+                        )}
+                      >
+                        {matchedCount}
+                      </span>
+                    </Chip>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
 
           {/* Minimum Star Rating */}
           <section className="space-y-2">

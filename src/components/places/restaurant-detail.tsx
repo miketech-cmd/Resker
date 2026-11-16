@@ -13,6 +13,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -32,9 +33,9 @@ import { formatPriceLevel, mapCuisinesToFoodIcon } from "@/lib/places/cuisines";
 import { normalizeFacetKey } from "@/lib/places/facets";
 import { downloadPlanIcs } from "@/lib/places/ics";
 import { buildMapsDirectionsUrl, buildMapsPlaceUrl } from "@/lib/places/maps-links";
+import { scheduleRestaurantDelete } from "@/lib/places/pending-delete";
 import { useCompletePlanMutation, usePlansQuery, type PlannedVisitItem } from "@/lib/queries/plans";
 import {
-  useDeleteRestaurantMutation,
   useRestaurantDetailQuery,
   useUpdateRestaurantMutation,
   type UserRestaurantItem,
@@ -220,6 +221,7 @@ export function RestaurantDetail({
   initialRestaurant: UserRestaurantItem;
   initialVisits?: VisitItem[];
 }) {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -230,7 +232,6 @@ export function RestaurantDetail({
   const { data: visits = initialVisits } = useRestaurantVisitsQuery(restaurant.id, initialVisits);
   const { data: allPlans = [] } = usePlansQuery();
   const updateMutation = useUpdateRestaurantMutation();
-  const deleteMutation = useDeleteRestaurantMutation();
   const completePlanMutation = useCompletePlanMutation();
 
   const [editOpen, setEditOpen] = useState(false);
@@ -325,14 +326,15 @@ export function RestaurantDetail({
     }
   }
 
-  async function handleDeleteSpot() {
-    try {
-      await deleteMutation.mutateAsync(restaurant.id);
-      toast(`Removed ${restaurant.name}`);
-      router.replace("/places");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not remove spot.");
-    }
+  function handleDeleteSpot() {
+    scheduleRestaurantDelete({
+      restaurant,
+      queryClient,
+      onUndo: (restored) => {
+        router.push(`/places/${restored.id}`);
+      },
+    });
+    router.replace("/places");
   }
 
   return (
@@ -665,7 +667,6 @@ export function RestaurantDetail({
                 variant="outline"
                 className="flex-1"
                 onClick={() => setConfirmDelete(false)}
-                disabled={deleteMutation.isPending}
               >
                 Cancel
               </Button>
@@ -673,10 +674,9 @@ export function RestaurantDetail({
                 type="button"
                 variant="destructive"
                 className="flex-1"
-                onClick={() => void handleDeleteSpot()}
-                disabled={deleteMutation.isPending}
+                onClick={handleDeleteSpot}
               >
-                {deleteMutation.isPending ? "Removing..." : "Yes, remove"}
+                Yes, remove
               </Button>
             </div>
           </Card>
